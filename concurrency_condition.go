@@ -71,12 +71,12 @@ func (cond *OneshotCondition) IfNotEnabled(execute func()) {
 	execute()
 }
 
-// ===== Implement Observee interface
+// ===== Implement Task interface
 
 func (cond *OneshotCondition) Stop() {
 	cond.EnableOnly()
 }
 
-func (cond *OneshotCondition) Observe(wg *sync.WaitGroup) <-chan interface{} {
-	return ObserveCondition(wg, cond)
+func (cond *OneshotCondition) Start(wg *sync.WaitGroup) <-chan interface{} {
+	return WaitCondition(wg, cond)
 }

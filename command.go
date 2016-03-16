@@ -119,15 +119,15 @@ func (command *Command) StateString() string {
 	}
 }
 
-// ===== Implement Observee interface
+// ===== Implement Task interface
 
 func (command *Command) String() string {
 	return command.StateString() + " (" + command.Logfile + ")"
 }
 
-func (command *Command) Observe(wg *sync.WaitGroup) <-chan interface{} {
+func (command *Command) Start(wg *sync.WaitGroup) <-chan interface{} {
 	if err := command.checkStarted(); err != nil {
 		return nil
 	}
-	return ObserveCondition(wg, command.processFinished)
+	return WaitCondition(wg, command.processFinished)
 }
