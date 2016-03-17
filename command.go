@@ -125,7 +125,7 @@ func (command *Command) String() string {
 	return command.StateString() + " (" + command.Logfile + ")"
 }
 
-func (command *Command) Start(wg *sync.WaitGroup) <-chan interface{} {
+func (command *Command) Start(wg *sync.WaitGroup) StopChan {
 	if err := command.checkStarted(); err != nil {
 		return nil
 	}

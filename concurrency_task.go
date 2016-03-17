@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"reflect"
@@ -12,19 +11,21 @@ import (
 )
 
 // ========= Task interface
+type StopChan <-chan error
 
 // Semantics: Start() may only be called once, but Stop() should be idempotent.
+// One error must be sent on StopChan upon stopping. The error can be nil.
 type Task interface {
-	Start(wg *sync.WaitGroup) <-chan interface{}
+	Start(wg *sync.WaitGroup) StopChan
 	Stop()
 }
 
 type NoopTask struct {
-	Chan        <-chan interface{}
+	Chan        StopChan
 	Description string
 }
 
-func (task *NoopTask) Start(*sync.WaitGroup) <-chan interface{} {
+func (task *NoopTask) Start(*sync.WaitGroup) StopChan {
 	return task.Chan
 }
 func (task *NoopTask) Stop() {
@@ -38,8 +39,8 @@ type CleanupTask struct {
 	once    sync.Once
 }
 
-func (task *CleanupTask) Start(*sync.WaitGroup) <-chan interface{} {
-	return make(chan interface{}, 1) // Never triggered
+func (task *CleanupTask) Start(*sync.WaitGroup) StopChan {
+	return make(chan error, 1) // Never triggered
 }
 func (task *CleanupTask) Stop() {
 	task.once.Do(func() {
@@ -51,10 +52,10 @@ func (task *CleanupTask) Stop() {
 
 type loopTask struct {
 	*OneshotCondition
-	loop func(stop <-chan interface{})
+	loop func(stop StopChan)
 }
 
-func (task *loopTask) Start(wg *sync.WaitGroup) <-chan interface{} {
+func (task *loopTask) Start(wg *sync.WaitGroup) StopChan {
 	cond := task.OneshotCondition
 	if loop := task.loop; loop != nil {
 		stop := WaitCondition(wg, cond)
@@ -73,17 +74,27 @@ func (task *loopTask) Start(wg *sync.WaitGroup) <-chan interface{} {
 	return cond.Start(wg)
 }
 
-func LoopTask(loop func(stop <-chan interface{})) Task {
+func LoopTask(loop func(stop StopChan)) Task {
 	return &loopTask{NewOneshotCondition(), loop}
 }
 
 // ========= Helpers to implement Task interface
 
-func WaitFunc(wg *sync.WaitGroup, wait func()) <-chan interface{} {
+func TaskFinished() StopChan {
+	return TaskFinishedError(nil)
+}
+
+func TaskFinishedError(err error) StopChan {
+	res := make(chan error, 1)
+	res <- err
+	return res
+}
+
+func WaitFunc(wg *sync.WaitGroup, wait func()) StopChan {
 	if wg != nil {
 		wg.Add(1)
 	}
-	finished := make(chan interface{}, 1)
+	finished := make(chan error, 1)
 	go func() {
 		if wg != nil {
 			defer wg.Done()
@@ -97,7 +108,7 @@ func WaitFunc(wg *sync.WaitGroup, wait func()) <-chan interface{} {
 	return finished
 }
 
-func WaitCondition(wg *sync.WaitGroup, cond *OneshotCondition) <-chan interface{} {
+func WaitCondition(wg *sync.WaitGroup, cond *OneshotCondition) StopChan {
 	if cond == nil {
 		return nil
 	}
@@ -106,9 +117,9 @@ func WaitCondition(wg *sync.WaitGroup, cond *OneshotCondition) <-chan interface{
 	})
 }
 
-func WaitForAny(channels []<-chan interface{}) int {
+func WaitForAny(channels []StopChan) (int, error) {
 	if len(channels) < 1 {
-		return -1
+		return -1, nil
 	}
 	// Use reflect package to wait for any of the given channels
 	var cases []reflect.SelectCase
@@ -118,19 +129,30 @@ func WaitForAny(channels []<-chan interface{}) int {
 			cases = append(cases, refCase)
 		}
 	}
-	choice, _, _ := reflect.Select(cases)
-	return choice
+	choice, result, _ := reflect.Select(cases)
+	channels[choice] = nil // Already received
+	return choice, result.Interface().(error)
 }
 
-func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) Task {
-	channels := make([]<-chan interface{}, 0, len(tasks))
+func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) (Task, error, []StopChan) {
+	channels := make([]StopChan, 0, len(tasks))
 	for _, task := range tasks {
 		if channel := task.Start(wg); channel != nil {
 			channels = append(channels, channel)
 		}
 	}
-	choice := WaitForAny(channels)
-	return tasks[choice]
+	choice, err := WaitForAny(channels)
+	return tasks[choice], err, channels
+}
+
+func CollectErrors(inputs []StopChan) []error {
+	result := make([]error, 0, len(inputs))
+	for _, input := range inputs {
+		if err := <-input; err != nil {
+			result = append(result, err)
+		}
+	}
+	return result
 }
 
 // ========= Task Group
@@ -165,7 +187,7 @@ func (group *TaskGroup) AddNamed(name string, tasks ...Task) {
 	group.all = append(group.all, tasks...)
 }
 
-func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) Task {
+func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) (Task, error, []StopChan) {
 	return WaitForAnyTask(wg, group.all)
 }
 
@@ -186,22 +208,24 @@ func (group *TaskGroup) ReverseStop() {
 	}
 }
 
-func (group *TaskGroup) WaitAndStop() Task {
+func (group *TaskGroup) WaitAndStop() (Task, []error) {
 	var wg sync.WaitGroup
-	choice := group.WaitForAny(&wg)
+	choice, err, others := group.WaitForAny(&wg)
 	group.ReverseStop()
 	wg.Wait()
-	return choice
+	errors := CollectErrors(others)
+	errors = append(errors, err)
+	return choice, errors
 }
 
 // ========= Sources of interrupts by the user
 
-func ExternalInterrupt() <-chan interface{} {
+func ExternalInterrupt() StopChan {
 	// This must be done after starting any openRTSP subprocess that depensd
 	// the ignore-handler for SIGNIT provided by ./noint
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	stop := make(chan interface{})
+	stop := make(chan error)
 	go func() {
 		defer signal.Stop(interrupt)
 		<-interrupt
@@ -210,27 +234,27 @@ func ExternalInterrupt() <-chan interface{} {
 	return stop
 }
 
-func UserInput() <-chan interface{} {
-	userinput := make(chan interface{}, 1)
+func UserInput() StopChan {
+	userinput := make(chan error, 1)
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		_, err := reader.ReadString('\n')
 		if err != nil {
-			log.Println("Error reading user input:", err)
+			err = fmt.Errorf("Error reading user input:", err)
 		}
-		userinput <- nil
+		userinput <- err
 	}()
 	return userinput
 }
 
-func StdinClosed() <-chan interface{} {
-	closed := make(chan interface{}, 1)
+func StdinClosed() StopChan {
+	closed := make(chan error, 1)
 	go func() {
 		_, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
-			log.Println("Error reading stdin:", err)
+			err = fmt.Errorf("Error reading stdin:", err)
 		}
-		closed <- nil
+		closed <- err
 	}()
 	return closed
 }

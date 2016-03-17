@@ -77,6 +77,6 @@ func (cond *OneshotCondition) Stop() {
 	cond.EnableOnly()
 }
 
-func (cond *OneshotCondition) Start(wg *sync.WaitGroup) <-chan interface{} {
+func (cond *OneshotCondition) Start(wg *sync.WaitGroup) StopChan {
 	return WaitCondition(wg, cond)
 }
