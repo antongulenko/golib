@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"reflect"
 	"sync"
+	"time"
 )
 
 // ========= Task interface
@@ -32,16 +33,17 @@ func (task *NoopTask) Start(*sync.WaitGroup) StopChan {
 func (task *NoopTask) Stop() {
 }
 func (task *NoopTask) String() string {
-	return fmt.Sprintf("Task(%v)", task.Description)
+	return fmt.Sprintf("Task(%s)", task.Description)
 }
 
 type CleanupTask struct {
-	Cleanup func()
-	once    sync.Once
+	Cleanup     func()
+	Description string
+	once        sync.Once
 }
 
 func (task *CleanupTask) Start(*sync.WaitGroup) StopChan {
-	return make(chan error, 1) // Never triggered
+	return nil
 }
 func (task *CleanupTask) Stop() {
 	task.once.Do(func() {
@@ -49,6 +51,9 @@ func (task *CleanupTask) Stop() {
 			cleanup()
 		}
 	})
+}
+func (task *CleanupTask) String() string {
+	return fmt.Sprintf("Cleanup(%s)", task.Description)
 }
 
 type loopTask struct {
@@ -140,28 +145,24 @@ func WaitForAny(channels []StopChan) (int, error) {
 	}
 	choice, result, _ := reflect.Select(cases)
 	channels[choice] = nil // Already received
-	return choice, result.Interface().(error)
+	if err, ok := result.Interface().(error); ok {
+		return choice, err
+	} else {
+		return choice, nil
+	}
 }
 
-func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) (Task, error, []StopChan) {
+func WaitForAnyTask(wg *sync.WaitGroup, tasks []Task) (Task, error, []Task, []StopChan) {
 	channels := make([]StopChan, 0, len(tasks))
+	waitingTasks := make([]Task, 0, len(tasks))
 	for _, task := range tasks {
 		if channel := task.Start(wg); channel != nil {
 			channels = append(channels, channel)
+			waitingTasks = append(waitingTasks, task)
 		}
 	}
 	choice, err := WaitForAny(channels)
-	return tasks[choice], err, channels
-}
-
-func CollectErrors(inputs []StopChan) []error {
-	result := make([]error, 0, len(inputs))
-	for _, input := range inputs {
-		if err := <-input; err != nil {
-			result = append(result, err)
-		}
-	}
-	return result
+	return waitingTasks[choice], err, waitingTasks, channels
 }
 
 func WaitForSetup(wg *sync.WaitGroup, setup func() error) StopChan {
@@ -215,7 +216,7 @@ func (group *TaskGroup) AddNamed(name string, tasks ...Task) {
 	group.all = append(group.all, tasks...)
 }
 
-func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) (Task, error, []StopChan) {
+func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) (Task, error, []Task, []StopChan) {
 	return WaitForAnyTask(wg, group.all)
 }
 
@@ -236,18 +237,43 @@ func (group *TaskGroup) ReverseStop() {
 	}
 }
 
-func (group *TaskGroup) WaitAndStop() (Task, []error) {
+func collectErrors(inputs []StopChan, tasks []Task, printWait bool) []error {
+	result := make([]error, 0, len(inputs))
+	for i, input := range inputs {
+		if input != nil {
+			if printWait {
+				task := tasks[i]
+				log.Printf("Waiting for %T: %v\n", task, task)
+			}
+			if err := <-input; err != nil {
+				result = append(result, err)
+			}
+		}
+	}
+	return result
+}
+
+func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (Task, []error) {
 	var wg sync.WaitGroup
-	choice, err, others := group.WaitForAny(&wg)
+	choice, err, tasks, channels := group.WaitForAny(&wg)
+	if timeout > 0 {
+		time.AfterFunc(timeout, func() {
+			panic("Waiting for stopping goroutines timed out")
+		})
+	}
 	group.ReverseStop()
 	wg.Wait()
-	errors := CollectErrors(others)
+	errors := collectErrors(channels, tasks, printWait)
 	errors = append(errors, err)
 	return choice, errors
 }
 
 func (group *TaskGroup) PrintWaitAndStop() {
-	reason, errors := group.WaitAndStop()
+	group.TimeoutPrintWaitAndStop(0, false)
+}
+
+func (group *TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration, printWait bool) {
+	reason, errors := group.WaitAndStop(timeout, printWait)
 	log.Printf("Stopped because of %T: %v\n", reason, reason)
 	for _, err := range errors {
 		if err != nil {
