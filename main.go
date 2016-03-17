@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	ExitHook         func()
+	ErrorExitHook    func()
 	checkerr_exiting bool
 )
 
@@ -18,8 +18,8 @@ func Checkerr(err error) {
 		}
 		checkerr_exiting = true
 		log.Println("Fatal Error:", err)
-		if ExitHook != nil {
-			ExitHook()
+		if ErrorExitHook != nil {
+			ErrorExitHook()
 		}
 		os.Exit(1)
 	}

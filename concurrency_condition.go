@@ -71,6 +71,16 @@ func (cond *OneshotCondition) IfNotEnabled(execute func()) {
 	execute()
 }
 
+func (cond *OneshotCondition) IfElseEnabled(enabled func(), disabled func()) {
+	cond.cond.L.Lock()
+	defer cond.cond.L.Unlock()
+	if cond.enabled {
+		enabled()
+	} else {
+		disabled()
+	}
+}
+
 // ===== Implement Task interface
 
 func (cond *OneshotCondition) Stop() {

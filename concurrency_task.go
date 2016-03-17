@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"reflect"
@@ -90,7 +91,7 @@ func TaskFinishedError(err error) StopChan {
 	return res
 }
 
-func WaitFunc(wg *sync.WaitGroup, wait func()) StopChan {
+func WaitErrFunc(wg *sync.WaitGroup, wait func() error) StopChan {
 	if wg != nil {
 		wg.Add(1)
 	}
@@ -99,13 +100,21 @@ func WaitFunc(wg *sync.WaitGroup, wait func()) StopChan {
 		if wg != nil {
 			defer wg.Done()
 		}
+		var err error
 		if wait != nil {
-			wait()
+			err = wait()
 		}
-		finished <- nil
+		finished <- err
 		close(finished)
 	}()
 	return finished
+}
+
+func WaitFunc(wg *sync.WaitGroup, wait func()) StopChan {
+	return WaitErrFunc(wg, func() error {
+		wait()
+		return nil
+	})
 }
 
 func WaitCondition(wg *sync.WaitGroup, cond *OneshotCondition) StopChan {
@@ -153,6 +162,25 @@ func CollectErrors(inputs []StopChan) []error {
 		}
 	}
 	return result
+}
+
+func WaitForSetup(wg *sync.WaitGroup, setup func() error) StopChan {
+	if wg != nil {
+		wg.Add(1)
+	}
+	failed := make(chan error, 1)
+	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
+		if setup != nil {
+			if err := setup(); err != nil {
+				failed <- err
+				close(failed)
+			}
+		}
+	}()
+	return failed
 }
 
 // ========= Task Group
@@ -218,6 +246,16 @@ func (group *TaskGroup) WaitAndStop() (Task, []error) {
 	return choice, errors
 }
 
+func (group *TaskGroup) PrintWaitAndStop() {
+	reason, errors := group.WaitAndStop()
+	log.Printf("Stopped because of %T: %v\n", reason, reason)
+	for _, err := range errors {
+		if err != nil {
+			log.Println("Error:", err)
+		}
+	}
+}
+
 // ========= Sources of interrupts by the user
 
 func ExternalInterrupt() StopChan {
@@ -240,7 +278,7 @@ func UserInput() StopChan {
 		reader := bufio.NewReader(os.Stdin)
 		_, err := reader.ReadString('\n')
 		if err != nil {
-			err = fmt.Errorf("Error reading user input:", err)
+			err = fmt.Errorf("Error reading user input: %v", err)
 		}
 		userinput <- err
 	}()
@@ -252,7 +290,7 @@ func StdinClosed() StopChan {
 	go func() {
 		_, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
-			err = fmt.Errorf("Error reading stdin:", err)
+			err = fmt.Errorf("Error reading stdin: %v", err)
 		}
 		closed <- err
 	}()
