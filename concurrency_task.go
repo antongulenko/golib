@@ -219,13 +219,19 @@ func (group *TaskGroup) Add(tasks ...Task) {
 }
 
 func (group *TaskGroup) AddNamed(name string, tasks ...Task) {
-	if list, ok := group.groups[name]; ok {
-		group.groups[name] = append(list, tasks...)
+	var list []Task
+	if existingList, ok := group.groups[name]; ok {
+		list = existingList
 	} else {
-		group.groups[name] = tasks
 		group.names = append(group.names, name)
 	}
-	group.all = append(group.all, tasks...)
+	for _, task := range tasks {
+		if task != nil {
+			group.all = append(group.all, tasks...)
+			list = append(list, task)
+		}
+	}
+	group.groups[name] = list
 }
 
 func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) (Task, error, []Task, []StopChan) {
