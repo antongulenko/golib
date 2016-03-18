@@ -2,6 +2,7 @@ package golib
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -20,10 +21,11 @@ type StopChan <-chan error
 type Task interface {
 	Start(wg *sync.WaitGroup) StopChan
 	Stop()
+	String() string // Tasks are frequently printed
 }
 
 type NoopTask struct {
-	Chan        StopChan
+	Chan        chan error
 	Description string
 }
 
@@ -31,6 +33,7 @@ func (task *NoopTask) Start(*sync.WaitGroup) StopChan {
 	return task.Chan
 }
 func (task *NoopTask) Stop() {
+	task.Chan <- nil
 }
 func (task *NoopTask) String() string {
 	return fmt.Sprintf("Task(%s)", task.Description)
@@ -56,12 +59,13 @@ func (task *CleanupTask) String() string {
 	return fmt.Sprintf("Cleanup(%s)", task.Description)
 }
 
-type loopTask struct {
+type LoopTask struct {
 	*OneshotCondition
-	loop func(stop StopChan)
+	loop        func(stop StopChan)
+	Description string
 }
 
-func (task *loopTask) Start(wg *sync.WaitGroup) StopChan {
+func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 	cond := task.OneshotCondition
 	if loop := task.loop; loop != nil {
 		stop := WaitCondition(wg, cond)
@@ -80,8 +84,16 @@ func (task *loopTask) Start(wg *sync.WaitGroup) StopChan {
 	return cond.Start(wg)
 }
 
-func LoopTask(loop func(stop StopChan)) Task {
-	return &loopTask{NewOneshotCondition(), loop}
+func (task *LoopTask) String() string {
+	return fmt.Sprintf("LoopTask(%s)", task.Description)
+}
+
+func NewLoopTask(description string, loop func(stop StopChan)) *LoopTask {
+	return &LoopTask{
+		OneshotCondition: NewOneshotCondition(),
+		loop:             loop,
+		Description:      description,
+	}
 }
 
 // ========= Helpers to implement Task interface
@@ -220,7 +232,7 @@ func (group *TaskGroup) WaitForAny(wg *sync.WaitGroup) (Task, error, []Task, []S
 	return WaitForAnyTask(wg, group.all)
 }
 
-func (group *TaskGroup) ReverseStop() {
+func (group *TaskGroup) ReverseStop(printTasks bool) {
 	for i := len(group.names) - 1; i >= 0; i-- {
 		// Stop groups in reverse order
 		var wg sync.WaitGroup
@@ -230,6 +242,9 @@ func (group *TaskGroup) ReverseStop() {
 			wg.Add(1)
 			go func(task Task) {
 				defer wg.Done()
+				if printTasks {
+					log.Printf("Stopping %v\n", task)
+				}
 				task.Stop()
 			}(task)
 		}
@@ -243,7 +258,7 @@ func collectErrors(inputs []StopChan, tasks []Task, printWait bool) []error {
 		if input != nil {
 			if printWait {
 				task := tasks[i]
-				log.Printf("Waiting for %T: %v\n", task, task)
+				log.Printf("Waiting for %v\n", task)
 			}
 			if err := <-input; err != nil {
 				result = append(result, err)
@@ -261,45 +276,64 @@ func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (Task
 			panic("Waiting for stopping goroutines timed out")
 		})
 	}
-	group.ReverseStop()
+	group.ReverseStop(printWait)
 	wg.Wait()
 	errors := collectErrors(channels, tasks, printWait)
 	errors = append(errors, err)
 	return choice, errors
 }
 
-func (group *TaskGroup) PrintWaitAndStop() {
-	group.TimeoutPrintWaitAndStop(0, false)
+var (
+	DefaultTaskStopTimeout   = time.Duration(0)
+	DefaultPrintTaskStopWait = false
+)
+
+func init() {
+	flag.BoolVar(&DefaultPrintTaskStopWait, "task_stop_print", DefaultPrintTaskStopWait, "Print tasks waited for when stopping (for debugging)")
+	flag.DurationVar(&DefaultTaskStopTimeout, "task_stop_timeout", DefaultTaskStopTimeout, "Timeout duration wen stopping and waiting for tasks to finish")
 }
 
-func (group *TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration, printWait bool) {
+func (group *TaskGroup) WaitAndExit() {
+	os.Exit(group.PrintWaitAndStop())
+}
+
+func (group *TaskGroup) PrintWaitAndStop() int {
+	return group.TimeoutPrintWaitAndStop(DefaultTaskStopTimeout, DefaultPrintTaskStopWait)
+}
+
+func (group *TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration, printWait bool) (numErrors int) {
 	reason, errors := group.WaitAndStop(timeout, printWait)
-	log.Printf("Stopped because of %T: %v\n", reason, reason)
+	log.Printf("Stopped because of %v\n", reason)
 	for _, err := range errors {
 		if err != nil {
 			log.Println("Error:", err)
+			numErrors++
 		}
 	}
+	return
 }
 
 // ========= Sources of interrupts by the user
 
-func ExternalInterrupt() StopChan {
-	// This must be done after starting any openRTSP subprocess that depensd
+func ExternalInterrupt() chan error {
+	// This must be done after starting any subprocess that depends
 	// the ignore-handler for SIGNIT provided by ./noint
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	stop := make(chan error)
+	stop := make(chan error, 2)
 	go func() {
 		defer signal.Stop(interrupt)
-		<-interrupt
+		select {
+		case <-interrupt:
+		case <-stop:
+		}
 		stop <- nil
 	}()
 	return stop
 }
 
-func UserInput() StopChan {
-	userinput := make(chan error, 1)
+func UserInput() chan error {
+	userinput := make(chan error, 2)
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		_, err := reader.ReadString('\n')
@@ -311,8 +345,8 @@ func UserInput() StopChan {
 	return userinput
 }
 
-func StdinClosed() StopChan {
-	closed := make(chan error, 1)
+func StdinClosed() chan error {
+	closed := make(chan error, 2)
 	go func() {
 		_, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
