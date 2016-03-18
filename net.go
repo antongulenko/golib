@@ -2,7 +2,9 @@ package golib
 
 import (
 	"errors"
+	"log"
 	"net"
+	"sync"
 )
 
 func FirstIpAddress() (net.IP, error) {
@@ -29,4 +31,78 @@ func FirstIpAddress() (net.IP, error) {
 		}
 	}
 	return nil, errors.New("No valid network interfaces found")
+}
+
+// ==================== TCP listener task ====================
+type TCPConnectionHandler func(wg *sync.WaitGroup, conn *net.TCPConn)
+
+type TCPListenerTask struct {
+	Handler        TCPConnectionHandler
+	ListenEndpoint string
+
+	loopTask *LoopTask
+	listener *net.TCPListener
+}
+
+func (task *TCPListenerTask) String() string {
+	return "TCP listener " + task.ListenEndpoint
+}
+
+func (task *TCPListenerTask) Start(wg *sync.WaitGroup) StopChan {
+	return task.ExtendedStart(nil, wg)
+}
+
+func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.WaitGroup) StopChan {
+	endpoint, err := net.ResolveTCPAddr("tcp", task.ListenEndpoint)
+	if err != nil {
+		return TaskFinishedError(err)
+	}
+	task.listener, err = net.ListenTCP("tcp", endpoint)
+	if err != nil {
+		return TaskFinishedError(err)
+	}
+	if start != nil {
+		start(task.listener.Addr())
+	}
+	task.loopTask = task.listen(wg)
+	return task.loopTask.Start(wg)
+}
+
+func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
+	return NewLoopTask("tcp listener", func(_ StopChan) {
+		if listener := task.listener; listener == nil {
+			return
+		} else {
+			conn, err := listener.AcceptTCP()
+			if err != nil {
+				if task.listener != nil {
+					log.Println("Error accepting connection:", err)
+				}
+			} else {
+				task.loopTask.IfElseEnabled(func() {
+					_ = conn.Close() // Drop error
+				}, func() {
+					task.Handler(wg, conn)
+				})
+			}
+		}
+	})
+}
+
+func (task *TCPListenerTask) Stop() {
+	task.ExtendedStop(nil)
+}
+
+func (task *TCPListenerTask) ExtendedStop(stop func()) {
+	if task.loopTask != nil {
+		task.loopTask.Enable(func() {
+			if listener := task.listener; listener != nil {
+				task.listener = nil  // Will be checked when returning from AcceptTCP()
+				_ = listener.Close() // Drop error
+			}
+			if stop != nil {
+				stop()
+			}
+		})
+	}
 }
