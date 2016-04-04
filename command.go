@@ -129,5 +129,5 @@ func (command *Command) Start(wg *sync.WaitGroup) StopChan {
 	if err := command.checkStarted(); err != nil {
 		return nil
 	}
-	return WaitCondition(wg, command.processFinished)
+	return command.processFinished.Start(wg)
 }

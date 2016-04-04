@@ -68,7 +68,7 @@ type LoopTask struct {
 func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 	cond := task.OneshotCondition
 	if loop := task.loop; loop != nil {
-		stop := WaitCondition(wg, cond)
+		stop := cond.Start(wg)
 		if wg != nil {
 			wg.Add(1)
 		}

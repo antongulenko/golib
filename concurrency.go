@@ -5,17 +5,29 @@ import "time"
 type Stopper struct {
 	stopped   chan bool
 	isStopped bool
+	num       int
 }
 
 func NewStopper() *Stopper {
+	return NewStopperLen(1)
+}
+
+func NewStopperLen(parallelStops int) *Stopper {
 	return &Stopper{
-		stopped: make(chan bool, 1),
+		stopped: make(chan bool, parallelStops),
+		num:     parallelStops,
 	}
 }
 
 func (s *Stopper) Stop() {
 	s.isStopped = true
-	s.stopped <- true
+	for i := 0; i < s.num; i++ {
+		select {
+		case s.stopped <- true:
+		default:
+			return
+		}
+	}
 }
 
 func (s *Stopper) Stopped(timeout time.Duration) bool {
@@ -26,7 +38,7 @@ func (s *Stopper) Stopped(timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return false
 	case <-s.stopped:
-		s.stopped <- true
+		s.Stop()
 		return true
 	}
 }
