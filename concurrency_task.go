@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -299,6 +300,7 @@ func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (reas
 	}
 	if timeout > 0 {
 		time.AfterFunc(timeout, func() {
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 			panic("Waiting for stopping goroutines timed out")
 		})
 	}
