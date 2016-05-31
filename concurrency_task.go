@@ -79,14 +79,14 @@ func (task *LoopTask) Start(wg *sync.WaitGroup) StopChan {
 			if wg != nil {
 				defer wg.Done()
 			}
+			if hook := task.StopHook; hook != nil {
+				defer hook()
+			}
 			for !cond.Enabled() {
 				task.Err = loop(stop)
 				if task.Err != nil {
 					cond.EnableErr(task.Err)
 				}
-			}
-			if hook := task.StopHook; hook != nil {
-				hook()
 			}
 		}()
 	}
