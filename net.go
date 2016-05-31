@@ -109,3 +109,7 @@ func (task *TCPListenerTask) ExtendedStop(stop func()) {
 		})
 	}
 }
+
+func (task *TCPListenerTask) IfRunning(do func()) {
+	task.loopTask.IfNotEnabled(do)
+}
