@@ -1,23 +1,27 @@
 package golib
 
 import (
-	"log"
 	"os"
+
+	"github.com/Sirupsen/logrus"
 )
 
 var (
 	ErrorExitHook    func()
 	checkerr_exiting bool
+
+	// Package-wide logger, can be configured or disabled.
+	Log = logrus.New()
 )
 
 func Checkerr(err error) {
 	if err != nil {
 		if checkerr_exiting {
-			log.Println("Recursive Checkerr:", err)
+			Log.Warnln("Recursive Checkerr:", err)
 			return
 		}
 		checkerr_exiting = true
-		log.Println("Fatal Error:", err)
+		Log.Errorln("Fatal:", err)
 		if ErrorExitHook != nil {
 			ErrorExitHook()
 		}
@@ -27,6 +31,6 @@ func Checkerr(err error) {
 
 func Printerr(err error) {
 	if err != nil {
-		log.Println("Error:", err)
+		Log.Errorln(err)
 	}
 }
