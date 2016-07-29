@@ -23,6 +23,7 @@ func StringLength(str string) (strlen int) {
 
 // iFrom and iTo are indices to normalized utf8-runes within the cleaned string.
 // Clean means no terminal escape characters and no color codes.
+// All runes and special codes will be preserved in the output string.
 func Substring(str string, iFrom int, iTo int) string {
 	var ia norm.Iter
 
