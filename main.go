@@ -1,26 +1,10 @@
 package golib
 
-import (
-	"os"
-	"time"
-
-	"github.com/Sirupsen/logrus"
-)
+import "os"
 
 var (
 	ErrorExitHook    func()
 	checkerr_exiting bool
-
-	// Package-wide logger, can be configured or disabled.
-	Log = &logrus.Logger{
-		Out: os.Stderr,
-		Formatter: &logrus.TextFormatter{
-			FullTimestamp:   true,
-			TimestampFormat: time.StampMilli,
-		},
-		Hooks: make(logrus.LevelHooks),
-		Level: logrus.DebugLevel,
-	}
 )
 
 func Checkerr(err error) {
