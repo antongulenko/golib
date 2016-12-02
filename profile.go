@@ -3,6 +3,7 @@ package golib
 import (
 	"flag"
 	"os"
+	"runtime"
 	"runtime/pprof"
 )
 
@@ -26,7 +27,9 @@ func ProfileCpu() (stopProfiling func()) {
 		if err != nil {
 			Log.Fatalln(err)
 		}
-		pprof.StartCPUProfile(cpu)
+		if err := pprof.StartCPUProfile(cpu); err != nil {
+			Log.Fatalln("Unable to start CPU profile:", err)
+		}
 	}
 	if MemProfileFile != "" {
 		mem, err = os.Create(MemProfileFile)
@@ -39,7 +42,10 @@ func ProfileCpu() (stopProfiling func()) {
 			pprof.StopCPUProfile()
 		}
 		if mem != nil {
-			pprof.WriteHeapProfile(mem)
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(mem); err != nil {
+				Log.Warnln("Failed to write Memory profile:", err)
+			}
 			mem.Close()
 		}
 	}
