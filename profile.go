@@ -12,9 +12,9 @@ var (
 	MemProfileFile = ""
 )
 
-func init() {
-	flag.StringVar(&CpuProfileFile, "cpuprofile", CpuProfileFile, "Write cpu profile data to file")
-	flag.StringVar(&MemProfileFile, "memprofile", MemProfileFile, "Write memory profile data to file")
+func RegisterProfileFlags() {
+	flag.StringVar(&CpuProfileFile, "profile-cpu", CpuProfileFile, "Write cpu profile data to file.")
+	flag.StringVar(&MemProfileFile, "profile-mem", MemProfileFile, "Write memory profile data to file.")
 }
 
 // Usage: defer golib.ProfileCpu()()

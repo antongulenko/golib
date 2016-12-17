@@ -328,9 +328,9 @@ var (
 	DefaultPrintTaskStopWait = false
 )
 
-func init() {
-	flag.BoolVar(&DefaultPrintTaskStopWait, "task_stop_print", DefaultPrintTaskStopWait, "Print tasks waited for when stopping (for debugging)")
-	flag.DurationVar(&DefaultTaskStopTimeout, "task_stop_timeout", DefaultTaskStopTimeout, "Timeout duration when stopping and waiting for tasks to finish")
+func RegisterTaskFlags() {
+	flag.BoolVar(&DefaultPrintTaskStopWait, "debug-task-stop", DefaultPrintTaskStopWait, "Print tasks waited for when stopping (for debugging)")
+	flag.DurationVar(&DefaultTaskStopTimeout, "debug-task-timeout", DefaultTaskStopTimeout, "Timeout duration when stopping and waiting for tasks to finish")
 }
 
 func (group *TaskGroup) PrintWaitAndStop() int {

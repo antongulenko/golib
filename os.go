@@ -9,7 +9,7 @@ var (
 	ConfiguredOpenFilesLimit uint64
 )
 
-func init() {
+func RegisterOFLFlags() {
 	flag.Uint64Var(&ConfiguredOpenFilesLimit, "ofl", ConfiguredOpenFilesLimit,
 		"Set to >0 for configuring the open files limit (only possible as root)")
 }

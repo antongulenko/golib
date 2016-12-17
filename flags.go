@@ -5,6 +5,31 @@ import (
 	"strings"
 )
 
+type Flags uint32
+
+const (
+	FlagsAll = 0xffffffff
+	FlagsLog = 1 << iota
+	FlagsProfile
+	FlagsTasks
+	FlagsOFL
+)
+
+func RegisterFlags(flags Flags) {
+	if flags&FlagsLog != 0 {
+		RegisterLogFlags()
+	}
+	if flags&FlagsProfile != 0 {
+		RegisterProfileFlags()
+	}
+	if flags&FlagsTasks != 0 {
+		RegisterTaskFlags()
+	}
+	if flags&FlagsOFL != 0 {
+		RegisterOFLFlags()
+	}
+}
+
 type StringSlice []string
 
 func (i *StringSlice) String() string {
