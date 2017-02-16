@@ -287,7 +287,7 @@ func (group *TaskGroup) ReverseStop(printTasks bool) {
 	}
 }
 
-func PrintErrors(inputs []StopChan, tasks []Task, printWait bool) (numErrors int) {
+func CollectErrors(inputs []StopChan, tasks []Task, printWait bool, do func(err error)) (numErrors int) {
 	for i, input := range inputs {
 		if input != nil {
 			if printWait {
@@ -296,11 +296,17 @@ func PrintErrors(inputs []StopChan, tasks []Task, printWait bool) (numErrors int
 			}
 			if err := <-input; err != nil {
 				numErrors++
-				Log.Errorln(err)
+				do(err)
 			}
 		}
 	}
 	return
+}
+
+func PrintErrors(inputs []StopChan, tasks []Task, printWait bool) (numErrors int) {
+	return CollectErrors(inputs, tasks, printWait, func(err error) {
+		Log.Errorln(err)
+	})
 }
 
 func (group *TaskGroup) WaitAndStop(timeout time.Duration, printWait bool) (Task, int) {
