@@ -48,16 +48,24 @@ type KeyValueStringSlice struct {
 	Values []string
 }
 
-func (i *KeyValueStringSlice) String() string {
-	return fmt.Sprintf("%v", *i)
+func (k *KeyValueStringSlice) String() string {
+	return fmt.Sprintf("%v", *k)
 }
 
-func (i *KeyValueStringSlice) Set(value string) error {
+func (k *KeyValueStringSlice) Set(value string) error {
 	parts := strings.SplitN(value, KeyValueSeparator, 2)
 	if len(parts) != 2 {
 		return fmt.Errorf("Wrong format. Need key=value, got " + value)
 	}
-	i.Keys = append(i.Keys, parts[0])
-	i.Values = append(i.Values, parts[1])
+	k.Keys = append(k.Keys, parts[0])
+	k.Values = append(k.Values, parts[1])
 	return nil
+}
+
+func (k *KeyValueStringSlice) Map() map[string]string {
+	result := make(map[string]string, len(k.Keys))
+	for i, key := range k.Keys {
+		result[key] = k.Values[i]
+	}
+	return result
 }
