@@ -17,7 +17,7 @@ type Command struct {
 	State    *os.ProcessState
 	StateErr error
 
-	processFinished *OneshotCondition
+	processFinished StopChan
 }
 
 func openLogfile(dirname, filename string) (*os.File, error) {
@@ -58,7 +58,7 @@ func StartCommand(prog string, args []string, shortName, logdir, logfile string)
 	}
 	command := &Command{
 		Name:            shortName,
-		processFinished: NewOneshotCondition(),
+		processFinished: NewStopChan(),
 		Proc:            cmd.Process,
 		Logfile:         logfile,
 	}
@@ -71,7 +71,7 @@ func (command *Command) waitForProcess() {
 	if state == nil && err == nil {
 		err = fmt.Errorf("No ProcState returned")
 	}
-	command.processFinished.Enable(func() {
+	command.processFinished.StopFunc(func() {
 		command.State, command.StateErr = state, err
 	})
 }
@@ -80,7 +80,7 @@ func (command *Command) IsFinished() bool {
 	if err := command.checkStarted(); err != nil {
 		return false
 	}
-	return command.processFinished.Enabled()
+	return command.processFinished.Stopped()
 }
 
 func (command *Command) checkStarted() error {
@@ -127,7 +127,7 @@ func (command *Command) String() string {
 
 func (command *Command) Start(wg *sync.WaitGroup) StopChan {
 	if err := command.checkStarted(); err != nil {
-		return nil
+		return NewStoppedChan(err)
 	}
-	return command.processFinished.Start(wg)
+	return command.processFinished
 }

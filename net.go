@@ -62,11 +62,11 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 
 	endpoint, err := net.ResolveTCPAddr("tcp", task.ListenEndpoint)
 	if err != nil {
-		return TaskFinishedError(err)
+		return NewStoppedChan(err)
 	}
 	task.listener, err = net.ListenTCP("tcp", endpoint)
 	if err != nil {
-		return TaskFinishedError(err)
+		return NewStoppedChan(err)
 	}
 	if start != nil {
 		start(task.listener.Addr())
@@ -77,26 +77,29 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 }
 
 func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
-	loop := NewLoopTask("tcp listener", func(_ StopChan) {
-		if listener := task.listener; listener == nil {
-			return
-		} else {
-			conn, err := listener.AcceptTCP()
-			if err != nil {
-				if task.listener != nil {
-					Log.Errorln("Error accepting connection:", err)
-				}
+	return &LoopTask{
+		Description: "tcp listener",
+		StopHook:    task.StopHook,
+		Loop: func(_ StopChan) error {
+			if listener := task.listener; listener == nil {
+				return StopLoopTask
 			} else {
-				task.loopTask.IfElseEnabled(func() {
-					_ = conn.Close() // Drop error
-				}, func() {
-					task.Handler(wg, conn)
-				})
+				conn, err := listener.AcceptTCP()
+				if err != nil {
+					if task.listener != nil {
+						Log.Errorln("Error accepting connection:", err)
+					}
+				} else {
+					task.loopTask.IfElseStopped(func() {
+						_ = conn.Close() // Drop error
+					}, func() {
+						task.Handler(wg, conn)
+					})
+				}
 			}
-		}
-	})
-	loop.StopHook = task.StopHook
-	return loop
+			return nil
+		},
+	}
 }
 
 func (task *TCPListenerTask) Stop() {
@@ -105,7 +108,7 @@ func (task *TCPListenerTask) Stop() {
 
 func (task *TCPListenerTask) ExtendedStop(stop func()) {
 	if task.loopTask != nil {
-		task.loopTask.Enable(func() {
+		task.loopTask.StopFunc(func() {
 			if listener := task.listener; listener != nil {
 				task.listener = nil  // Will be checked when returning from AcceptTCP()
 				_ = listener.Close() // Drop error
@@ -118,5 +121,5 @@ func (task *TCPListenerTask) ExtendedStop(stop func()) {
 }
 
 func (task *TCPListenerTask) IfRunning(do func()) {
-	task.loopTask.IfNotEnabled(do)
+	task.loopTask.IfNotStopped(do)
 }
