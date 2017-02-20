@@ -15,6 +15,9 @@ type CliLogBox struct {
 }
 
 func (box *CliLogBox) Init() {
+	if box.MessageBuffer <= 0 {
+		panic("CliLogBox.MessageBuffer must be >0")
+	}
 	box.LogBuffer = golib.NewLogBuffer(box.MessageBuffer)
 }
 
