@@ -109,6 +109,7 @@ func (task *LoopTask) String() string {
 }
 
 // ========= Sources of interrupts by the user
+// Can be used with NoopTask to shut down a TaskGroup.
 
 func ExternalInterrupt() StopChan {
 	// This must be done after starting any subprocess that depends

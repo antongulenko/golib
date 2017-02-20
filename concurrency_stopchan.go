@@ -7,9 +7,10 @@ import (
 )
 
 type stopChan struct {
-	cond    sync.Cond
-	stopped bool
-	err     error
+	cond     sync.Cond
+	stopped  bool
+	err      error
+	waitChan chan error
 }
 
 // The nil-value of StopChan (e.g. StopChan{}) mostly acts like an already-stopped StopChan with a nil error.
@@ -96,20 +97,29 @@ func (s *stopChan) Wait() {
 	}
 }
 
-// TODO if this is used often in conjunction with time.After(), then many unfinished
-// goroutines might accumulate... Clean up somehow
+// The returned channel never receives any values, but is closed as soon as the
+// underlying StopChannel is stopped. The Err() method can be used to retrieve the error instance afterwards.
 func (s *stopChan) WaitChan() <-chan error {
-	c := make(chan error, 1)
 	if s == nil {
+		c := make(chan error)
 		close(c)
-	} else {
-		go func() {
-			s.Wait()
-			c <- s.err
-			close(c)
-		}()
+		return c
 	}
-	return c
+	// Double checked locking
+	// To avoid memory leak, lazily create one channel and one goroutine.
+	if s.waitChan == nil {
+		s.cond.L.Lock()
+		defer s.cond.L.Unlock()
+		if s.waitChan == nil {
+			s.waitChan = make(chan error)
+			c := s.waitChan
+			go func() {
+				s.Wait()
+				close(c)
+			}()
+		}
+	}
+	return s.waitChan
 }
 
 // Return true means wait timed out, return false means the StopChan was stopped before the timeout expired.

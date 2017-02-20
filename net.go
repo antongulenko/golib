@@ -78,9 +78,9 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 
 func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
 	return &LoopTask{
-		Description: "tcp listener",
+		Description: "tcp listener on " + task.ListenEndpoint,
 		StopHook:    task.StopHook,
-		Loop: func(_ StopChan) error {
+		Loop: func(stop StopChan) error {
 			if listener := task.listener; listener == nil {
 				return StopLoopTask
 			} else {
@@ -90,7 +90,7 @@ func (task *TCPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
 						Log.Errorln("Error accepting connection:", err)
 					}
 				} else {
-					task.loopTask.IfElseStopped(func() {
+					stop.IfElseStopped(func() {
 						_ = conn.Close() // Drop error
 					}, func() {
 						task.Handler(wg, conn)

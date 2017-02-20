@@ -32,12 +32,6 @@ func (group TaskGroup) StartTasks(wg *sync.WaitGroup) []StopChan {
 	return channels
 }
 
-func (group TaskGroup) WaitForAny(wg *sync.WaitGroup) ([]StopChan, int) {
-	channels := group.StartTasks(wg)
-	choice := WaitForAny(channels)
-	return channels, choice
-}
-
 func (group TaskGroup) Stop() {
 	var wg sync.WaitGroup
 	for _, task := range group {
@@ -55,7 +49,8 @@ func (group TaskGroup) Stop() {
 
 func (group TaskGroup) WaitAndStop(timeout time.Duration) (Task, int) {
 	var wg sync.WaitGroup
-	channels, reason := group.WaitForAny(&wg)
+	channels := group.StartTasks(&wg)
+	reason := WaitForAny(channels)
 	if timeout > 0 {
 		time.AfterFunc(timeout, func() {
 			pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
@@ -64,16 +59,15 @@ func (group TaskGroup) WaitAndStop(timeout time.Duration) (Task, int) {
 	}
 	group.Stop()
 	wg.Wait()
-	numErrors := group.PrintErrors(channels)
+
+	numErrors := group.CollectErrors(channels, func(err error) {
+		Log.Errorln(err)
+	})
 	return group[reason], numErrors
 }
 
 func (group TaskGroup) PrintWaitAndStop() int {
-	return group.TimeoutPrintWaitAndStop(TaskStopTimeout)
-}
-
-func (group TaskGroup) TimeoutPrintWaitAndStop(timeout time.Duration) int {
-	reason, numErrors := group.WaitAndStop(timeout)
+	reason, numErrors := group.WaitAndStop(TaskStopTimeout)
 	Log.Debugln("Stopped because of", reason)
 	return numErrors
 }
@@ -93,12 +87,6 @@ func (group TaskGroup) CollectErrors(channels []StopChan, do func(err error)) (n
 		}
 	}
 	return
-}
-
-func (group TaskGroup) PrintErrors(channels []StopChan) (numErrors int) {
-	return group.CollectErrors(channels, func(err error) {
-		Log.Errorln(err)
-	})
 }
 
 func (group TaskGroup) CollectMultiError(channels []StopChan) MultiError {
