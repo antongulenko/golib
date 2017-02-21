@@ -3,22 +3,18 @@ package gotermBox
 import (
 	"io"
 
-	"github.com/antongulenko/golib"
 	"github.com/antongulenko/goterm"
 )
 
 type CliLogBox struct {
-	*golib.LogBuffer
+	*LogBuffer
 	NoUtf8        bool
 	LogLines      int
 	MessageBuffer int
 }
 
 func (box *CliLogBox) Init() {
-	if box.MessageBuffer <= 0 {
-		panic("CliLogBox.MessageBuffer must be >0")
-	}
-	box.LogBuffer = golib.NewLogBuffer(box.MessageBuffer)
+	box.LogBuffer = NewLogBuffer(box.MessageBuffer)
 }
 
 func (self *CliLogBox) Update(writeContent func(out io.Writer, width int)) {

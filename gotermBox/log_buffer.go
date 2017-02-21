@@ -1,4 +1,4 @@
-package golib
+package gotermBox
 
 import (
 	"container/ring"
@@ -17,6 +17,9 @@ type LogBuffer struct {
 }
 
 func NewLogBuffer(message_buffer int) *LogBuffer {
+	if message_buffer <= 0 {
+		panic("message_buffer must be >0")
+	}
 	return &LogBuffer{
 		messages:       ring.New(message_buffer),
 		message_buffer: message_buffer,
