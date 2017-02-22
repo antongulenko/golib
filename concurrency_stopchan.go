@@ -13,12 +13,24 @@ type stopChan struct {
 	waitChan chan error
 }
 
+// StopChan is a utility type for coordinating concurrenct goroutines.
+// Initially, a StopChan is 'running' and can be stopped exactly once.
+// Goroutines can wait for the StopChan to be stopped and query the current status
+// in various ways.
+//
+// When stopping a StopChan, an error instance can optionally be stored for
+// later reference.
+//
+// StopChan values should always be passed and stored by-value instead of by-reference,
+// since they contain a pointer to the actual internal data.
+//
 // The nil-value of StopChan (e.g. StopChan{}) mostly acts like an already-stopped StopChan with a nil error.
 // The only exception is the WaitForAny() function, which will ignore uninitialized StopChans.
 type StopChan struct {
 	*stopChan
 }
 
+// NewStopChan allocates a new, un-stopped StopChan.
 func NewStopChan() StopChan {
 	return StopChan{
 		stopChan: &stopChan{
@@ -29,12 +41,17 @@ func NewStopChan() StopChan {
 	}
 }
 
+// NewStoppedChan returns a StopChan that is already stopped, and contains the
+// given error value.
 func NewStoppedChan(err error) StopChan {
 	res := NewStopChan()
 	res.StopErr(err)
 	return res
 }
 
+// StopErrFunc stops the receiving StopChan, iff it is not already stopped.
+// In that case, the given function is executed and the resulting error value
+// is stored within the StopChan.
 func (s *stopChan) StopErrFunc(perform func() error) {
 	if s == nil {
 		return
@@ -51,6 +68,8 @@ func (s *stopChan) StopErrFunc(perform func() error) {
 	s.cond.Broadcast()
 }
 
+// StopFunc stops the receiving StopChan and executes the given function, iff
+// it was not already stopped.
 func (s *stopChan) StopFunc(perform func()) {
 	s.StopErrFunc(func() error {
 		if perform != nil {
@@ -60,16 +79,21 @@ func (s *stopChan) StopFunc(perform func()) {
 	})
 }
 
+// StopErr stops the receiving Stopchan, iff it was not already stopped.
+// The given error value is stored in the StopChan.
 func (s *stopChan) StopErr(err error) {
 	s.StopErrFunc(func() error {
 		return err
 	})
 }
 
+// Stop stops the receiving StopChan without storing any error value.
 func (s *stopChan) Stop() {
 	s.StopErrFunc(nil)
 }
 
+// Stopped returns whether the StopChan is stopped or not. It blocks, if the
+// StopChan is currently being stopped by another goroutine.
 func (s *stopChan) Stopped() bool {
 	if s == nil {
 		return true
@@ -79,6 +103,8 @@ func (s *stopChan) Stopped() bool {
 	return s.stopped
 }
 
+// Err returns the error value stored in the StopChan. It will always be nil,
+// if the StopChan has not been stopped yet, but can also be nil for a stopped StopChan.
 func (s *stopChan) Err() error {
 	if s == nil {
 		return nil
@@ -86,6 +112,7 @@ func (s *stopChan) Err() error {
 	return s.err
 }
 
+// Wait blocks until the receiving StopChan is stopped.
 func (s *stopChan) Wait() {
 	if s == nil {
 		return
@@ -97,8 +124,14 @@ func (s *stopChan) Wait() {
 	}
 }
 
-// The returned channel never receives any values, but is closed as soon as the
-// underlying StopChannel is stopped. The Err() method can be used to retrieve the error instance afterwards.
+// WaitChan returns a channel that is closed as soon as the receiving StopChan
+// is stopped. The returned channel never receives any values.
+// The Err() method can be used to retrieve the error instance stored in the
+// StopChan afterwards.
+//
+// To avoid memory leaks, only one channel is lazily created per StopChan instance,
+// accompanied by one goroutine that closes that channel after waiting for the StopChan
+// to be stopped. The same channel will be returned by all calls to WaitChan().
 func (s *stopChan) WaitChan() <-chan error {
 	if s == nil {
 		c := make(chan error)
@@ -122,7 +155,11 @@ func (s *stopChan) WaitChan() <-chan error {
 	return s.waitChan
 }
 
-// Return true means wait timed out, return false means the StopChan was stopped before the timeout expired.
+// WaitTimeout waits for the StopChan to be stopped, but returns if the given
+// time duration has passed without that happening.
+// The return value indicates which one of the two happened:
+//  1. Return true means the wait timed out and the StopChan is still active.
+//  2. Return false means the StopChan was stopped before the timeout expired.
 func (s *stopChan) WaitTimeout(t time.Duration) bool {
 	if s == nil {
 		return false
@@ -135,6 +172,21 @@ func (s *stopChan) WaitTimeout(t time.Duration) bool {
 	}
 }
 
+// Execute executes the given function while grabbing the internal lock of the StopChan.
+// This means that no other goroutine can stop the StopChan while the function is running,
+// and that it is mutually exclusive with any of the IfStopped etc. methods.
+// This is sometimes usefull, if the StopChan is used for its locking capabilities.
+func (s *stopChan) Execute(execute func()) {
+	if s != nil {
+		s.cond.L.Lock()
+		defer s.cond.L.Unlock()
+	}
+	execute()
+}
+
+// IfStopped executes the given function, iff the receiving StopChan is not yet
+// stopped. This call guarantees that the StopChan is not stopped while the
+// function is being executed.
 func (s *stopChan) IfStopped(execute func()) {
 	if s == nil {
 		execute()
@@ -148,6 +200,9 @@ func (s *stopChan) IfStopped(execute func()) {
 	execute()
 }
 
+// IfNotStopped executes the given function, iff the receiving StopChan is already
+// stopped. If another goroutine is currently stopping this StopChan (see StopErrFunc),
+// IfNotStopped waits until the StopChan is finally stopped before executing the callback.
 func (s *stopChan) IfNotStopped(execute func()) {
 	if s == nil {
 		return
@@ -160,6 +215,9 @@ func (s *stopChan) IfNotStopped(execute func()) {
 	execute()
 }
 
+// IfElseStopped executes one of the two given functions, depending on the stopped state
+// of the StopChan. This call guarantees that the StopChan is not stopped while any of the
+// functions is being executed.
 func (s *stopChan) IfElseStopped(stopped func(), notStopped func()) {
 	if s == nil {
 		stopped()
@@ -174,8 +232,9 @@ func (s *stopChan) IfElseStopped(stopped func(), notStopped func()) {
 	}
 }
 
-// ========= Additional constructors =========
-
+// WaitErrFunc executes the given function and returns a StopChan, that
+// will automatically be stopped after the function finishes.
+// The error instance return by the function will be stored in the StopChan.
 func WaitErrFunc(wg *sync.WaitGroup, wait func() error) StopChan {
 	if wg != nil {
 		wg.Add(1)
@@ -194,6 +253,8 @@ func WaitErrFunc(wg *sync.WaitGroup, wait func() error) StopChan {
 	return finished
 }
 
+// WaitErrFunc executes the given function and returns a StopChan, that
+// will automatically be stopped after the function finishes.
 func WaitFunc(wg *sync.WaitGroup, wait func()) StopChan {
 	return WaitErrFunc(wg, func() error {
 		wait()
@@ -201,8 +262,13 @@ func WaitFunc(wg *sync.WaitGroup, wait func()) StopChan {
 	})
 }
 
-// Like WaitErrFunc, but only close the resulting StopChan, if the setup function
-// returns a non-nil error
+// WaitForSetup executes the given function and returns a StopChan,
+// that will be stopped after the function finishes, but ONLY if the
+// function returns a non-nil error value. In that case the returned error
+// is stored in the stopped StopChan.
+//
+// This behaviour is similar to WaitErrFunc, but it leaves the StopChan
+// active if the setup function finished successfully.
 func WaitForSetup(wg *sync.WaitGroup, setup func() error) StopChan {
 	if wg != nil {
 		wg.Add(1)
@@ -221,8 +287,15 @@ func WaitForSetup(wg *sync.WaitGroup, setup func() error) StopChan {
 	return failed
 }
 
-// ========= Helper functions =========
-
+// WaitForAny returns if any of the give StopChan values are stopped. The implementation/
+// uses the reflect package to create a select-statement of variable size.
+//
+// Exception: Uninitialized StopChans (created through the nil-value StopChan{}) are ignored,
+// although they behave like stopped StopChans otherwise.
+//
+// The return value is the index of the StopChan that caused this function to return.
+// If the given channel slice is empty, or if it contains only uninitialized StopChan instances,
+// the return value will be -1.
 func WaitForAny(channels []StopChan) int {
 	if len(channels) == 0 {
 		return -1

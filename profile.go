@@ -8,17 +8,30 @@ import (
 )
 
 var (
+	// CpuProfileFile will be used to output a CPU profile of the running program,
+	// if ProfileCpu() is called. This field is configured by the '-profile-cpu' flag
+	// created by RegisterProfileFlags().
 	CpuProfileFile = ""
+
+	// MemProfileFile will be used to output a memory usage profile of the running program,
+	// if ProfileCpu() is called. This field is configured by the '-profile-mem' flag
+	// created by RegisterProfileFlags().
 	MemProfileFile = ""
 )
 
+// RegisterProfileFlags registers flags to configure the CpuProfileFile and MemProfileFile
+// by user-provided flags.
 func RegisterProfileFlags() {
 	flag.StringVar(&CpuProfileFile, "profile-cpu", CpuProfileFile, "Write cpu profile data to file.")
 	flag.StringVar(&MemProfileFile, "profile-mem", MemProfileFile, "Write memory profile data to file.")
 }
 
-// Usage: defer golib.ProfileCpu()()
-// Performs both cpu and memory profiling, if enabled
+// ProfileCpu initiates memory and CPU profiling if any of the CpuProfileFile and MemProfileFile
+// is set to non-empty strings, respectively. The function returns a tear-down function
+// that must be called before the program exists in order to flush the profiling data to the
+// output files.
+// It can be used like this:
+//   defer golib.ProfileCpu()()
 func ProfileCpu() (stopProfiling func()) {
 	var cpu, mem *os.File
 	var err error

@@ -10,12 +10,24 @@ import (
 )
 
 var (
-	LogFile      string
-	LogVerbose   bool
-	LogQuiet     bool
+	// LogFile can be set to non-empty to make ConfigureLogging output all log
+	// entries in addition to showing them on the standard error stream.
+	// All entries are output to the file, regardless of the log-level configured for the
+	// console output.
+	LogFile string
+
+	// LogVerbose makes the ConfigureLogging() function set the global log level to Debug.
+	LogVerbose bool
+
+	// LogQuiet makes the ConfigureLogging() function set the global log level to Warn, but
+	// only of LogVerbose is not set.
+	LogQuiet bool
+
+	// LogVeryQuiet makes the ConfigureLogging() function set the global log level to Error,
+	// but only if LogVerbose and LogQuiet are both not set.
 	LogVeryQuiet bool
 
-	// Package-wide logger, can be configured or disabled.
+	// Log is the package-wide logger for the golib package. It can be configured or disabled.
 	Log = &log.Logger{
 		Out: os.Stderr,
 		Formatter: &log.TextFormatter{
@@ -34,7 +46,7 @@ func init() {
 	Log = log.StandardLogger()
 }
 
-// RegisterLogFlags registers flags for changing variables that will controll
+// RegisterLogFlags registers flags for changing variables that will control
 // the log level and other logging parameters when calling ConfigureLogging().
 func RegisterLogFlags() {
 	flag.BoolVar(&LogVerbose, "v", false, "Enable verbose logging output")
@@ -43,8 +55,8 @@ func RegisterLogFlags() {
 	flag.StringVar(&LogFile, "log", "", "Redirect logs to a given file in addition to the console.")
 }
 
-// ConfigureLogging configures the logger based on the command-line flags defined in RegisterLogFlags.
-// This function should be called early in every main package, preferably before any prior logging output,
+// ConfigureLogging configures the logger based on the global Log* variables defined in the package.
+// This function should be called early in every main() function, preferably before any prior logging output,
 // but after calling RegisterLogFlags() and flag.Parse().
 func ConfigureLogging() {
 	level := log.InfoLevel

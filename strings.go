@@ -8,8 +8,8 @@ import (
 	"github.com/lunixbochs/vtclean"
 )
 
-// Return the number of normalized utf8-runes within the cleaned string.
-// Clean means no terminal escape characters and no color codes.
+// StringLength returns the number of normalized utf8-runes within the cleaned string.
+// Clean means the string is stripped of terminal escape characters and color codes.
 func StringLength(str string) (strlen int) {
 	str = vtclean.Clean(str, false)
 	for str != "" {
@@ -25,6 +25,8 @@ func StringLength(str string) (strlen int) {
 	return
 }
 
+// ReadRune reads one utf8 rune from the input string and provides information
+// about the character width of the read rune.
 func ReadRune(input string) (theRune string, rest string, runeWidth int) {
 	prop, size := width.LookupString(input)
 	rest = input[size:]
@@ -38,8 +40,11 @@ func ReadRune(input string) (theRune string, rest string, runeWidth int) {
 	return
 }
 
-// iFrom and iTo are indices to normalized utf8-runes within the cleaned string.
-// Clean means no terminal escape characters and no color codes.
+// Substring returns a substring of the given input string, but the indices
+// iFrom and iTo point to normalized utf8-runes within the cleaned string.
+// Clean means the string is stripped of terminal escape characters and color codes.
+// The total number of normalized utf8 runes in the clean string can be obtained from
+// the StringLength() function.
 // All runes and special codes will be preserved in the output string.
 func Substring(str string, iFrom int, iTo int) string {
 

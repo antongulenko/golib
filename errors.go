@@ -5,8 +5,11 @@ import (
 	"fmt"
 )
 
+// MultiError is a helper type for combining multiple error values into one.
 type MultiError []error
 
+// NilOrError returns either nil, the only contained error, or the entire MultiError,
+// depending on the number of contained errors.
 func (err MultiError) NilOrError() error {
 	if len(err) == 0 {
 		return nil
@@ -16,12 +19,15 @@ func (err MultiError) NilOrError() error {
 	return err
 }
 
+// Add adds the given error to the MultiError, if it is not nil.
 func (err *MultiError) Add(errOrNil error) {
 	if err != nil && errOrNil != nil {
 		*err = append(*err, errOrNil)
 	}
 }
 
+// Error implements the error interface by printing all contained errors
+// on a separate line.
 func (err MultiError) Error() string {
 	switch len(err) {
 	case 0:

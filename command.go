@@ -9,27 +9,42 @@ import (
 	"syscall"
 )
 
+// Command starts a subprocess and optionally redirects the stdout and stderr
+// streams to a log file.
+// Command implements implements the Task interface: the subprocess
+// can be stopped on demand, and the StopChan returns from the Start()
+// method will be closed after the subprocess exists.
 type Command struct {
+	// Program is name of the executable that will be started as a subprocess
 	Program string
-	Args    []string
+	// Args are the arguments that will be passed to the spawned subprocess.
+	Args []string
 
-	// Can be set for more descriptive log messages
+	// ShortName can optionally be set to a concise string describing the command
+	// to make log messages more descriptive. Otherwise, the value of the Program field will be used.
 	ShortName string
 
-	// Optional log files
-
-	Logdir  string
+	// Logdir can be set together with Logfile to redirect the stderr and stdout
+	// streams of the subprocess. A suffix is a appended to the given file to make
+	// sure it does not exist.
+	Logdir string
+	// See Logdir
 	Logfile string
 
-	// Fields below will be initialized in Start()
+	// Proc will be initialized when calling Start() and points to the running subprocess.
+	Proc *os.Process
 
-	Proc     *os.Process
-	State    *os.ProcessState
+	// State and StateErr will be initialized when the subprocess exits and give information
+	// about the exit state of the process.
+	State *os.ProcessState
+	// See State
 	StateErr error
 
 	processFinished StopChan
 }
 
+// Start implements the Task interface. It starts the process and returns a StopChan,
+// that will be closed after the subprocess exits.
 func (command *Command) Start(wg *sync.WaitGroup) StopChan {
 	process := exec.Command(command.Program, command.Args...)
 	if command.Logdir != "" && command.Logfile != "" {
@@ -88,10 +103,20 @@ func (command *Command) waitForProcess(wg *sync.WaitGroup) {
 	command.processFinished.StopErr(err)
 }
 
+// String returns readable information about the process state and the
+// logfile that contains stdout and stderr.
 func (command *Command) String() string {
-	return command.StateString() + " (" + command.Logfile + ")"
+	state := command.StateString()
+	if command.Logfile != "" {
+		state += " (" + command.Logfile + ")"
+	}
+	return state
 }
 
+// Stop implements the Task interface and tries to stop the subprocess by
+// sending it the SIGHUP signal.
+// TODO try other measures to kill the subprocess, if it does not finish after a
+// timeout.
 func (command *Command) Stop() {
 	if err := command.checkStarted(); err != nil {
 		return
@@ -99,6 +124,7 @@ func (command *Command) Stop() {
 	command.Proc.Signal(syscall.SIGHUP)
 }
 
+// IsFinished returns true if the subprocess has been started and then exited afterwards.
 func (command *Command) IsFinished() bool {
 	if err := command.checkStarted(); err != nil {
 		return false
@@ -106,10 +132,12 @@ func (command *Command) IsFinished() bool {
 	return command.processFinished.Stopped()
 }
 
+// Success returns true, if the subprocess has been started and finished successfully.
 func (command *Command) Success() bool {
 	return command.StateErr != nil || (command.State != nil && command.State.Success())
 }
 
+// StateString returns a descriptive string about the state of the subprocess.
 func (command *Command) StateString() string {
 	if err := command.checkStarted(); err != nil {
 		return err.Error()
