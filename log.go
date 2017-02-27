@@ -85,6 +85,7 @@ func ConfigureLogging() {
 
 func newLogFormatter() *log.TextFormatter {
 	return &log.TextFormatter{
+		ForceColors:     true,
 		FullTimestamp:   true,
 		TimestampFormat: time.StampMilli,
 	}
