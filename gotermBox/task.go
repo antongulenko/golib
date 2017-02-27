@@ -17,7 +17,8 @@ var _ golib.Task = &CliLogBoxTask{}
 // capturing all log entries, and regularly updating the screen in a separate goroutine.
 type CliLogBoxTask struct {
 	CliLogBox
-	updateTask *golib.LoopTask
+	updateTask    *golib.LoopTask
+	updateTrigger chan interface{}
 
 	// UpdateInterval configures the wait-period between screen-refresh cycles.
 	UpdateInterval time.Duration
@@ -32,8 +33,14 @@ type CliLogBoxTask struct {
 // If any log message is fire before calling this, it will not be displayed in the log
 // box, and the log box will overwrite the log message on the console.
 func (t *CliLogBoxTask) Init() {
+	t.updateTrigger = make(chan interface{}, 1)
 	t.CliLogBox.Init()
 	t.RegisterMessageHook()
+
+	// Try to directly refresh the screen every time a new message comes in
+	t.PushMessageHook = func(msg string) {
+		t.TriggerUpdate()
+	}
 }
 
 // String implements the golib.Task interface.
@@ -45,10 +52,10 @@ func (t *CliLogBoxTask) String() string {
 // and starts a looping goroutine for refreshing the screen content. When
 // the task is stopped, it will automatically restore the operation of the default logger.
 func (t *CliLogBoxTask) Start(wg *sync.WaitGroup) golib.StopChan {
-	t.InterceptLogger()
 	if t.Update == nil {
 		return golib.NewStoppedChan(errors.New("CliLogBoxTask.Update cannot be nil"))
 	}
+	t.InterceptLogger()
 	t.updateTask = &golib.LoopTask{
 		Description: "CliLogBoxTask",
 		StopHook: func() {
@@ -59,7 +66,11 @@ func (t *CliLogBoxTask) Start(wg *sync.WaitGroup) golib.StopChan {
 		Loop: func(stop golib.StopChan) (err error) {
 			err = t.updateBox()
 			if err == nil {
-				stop.WaitTimeout(t.UpdateInterval)
+				select {
+				case <-time.After(t.UpdateInterval):
+				case <-stop.WaitChan():
+				case <-t.updateTrigger:
+				}
 			}
 			return
 		},
@@ -71,6 +82,14 @@ func (t *CliLogBoxTask) Start(wg *sync.WaitGroup) golib.StopChan {
 // the default logger.
 func (t *CliLogBoxTask) Stop() {
 	t.updateTask.Stop()
+}
+
+// Update triggers an immediate screen update.
+func (t *CliLogBoxTask) TriggerUpdate() {
+	select {
+	case t.updateTrigger <- nil:
+	default:
+	}
 }
 
 func (t *CliLogBoxTask) updateBox() (err error) {

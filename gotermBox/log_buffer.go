@@ -12,6 +12,10 @@ import (
 // LogBuffer can be used to intercept the default logger of the "github.com/Sirupsen/logrus" package
 // and store all messages to a ring-buffer instead of outputting them directly.
 type LogBuffer struct {
+	// PushMessageHook is called each time a message is a added to this LogBuffer,
+	// regardless if it was added from a logger or explicitely over PushMessage().
+	PushMessageHook func(newMessage string)
+
 	messages          *ring.Ring
 	msgLock           sync.Mutex
 	message_buffer    int
@@ -32,9 +36,12 @@ func NewLogBuffer(message_buffer int) *LogBuffer {
 // PushMessage adds a message to the message ring buffer.
 func (buf *LogBuffer) PushMessage(msg string) {
 	buf.msgLock.Lock()
-	defer buf.msgLock.Unlock()
 	buf.messages.Value = msg
 	buf.messages = buf.messages.Next()
+	buf.msgLock.Unlock()
+	if hook := buf.PushMessageHook; hook != nil {
+		hook(msg)
+	}
 }
 
 // PrintMessages prints all stored messages to the given io.Writer instance,
