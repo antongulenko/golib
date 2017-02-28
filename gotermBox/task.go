@@ -23,6 +23,10 @@ type CliLogBoxTask struct {
 	// UpdateInterval configures the wait-period between screen-refresh cycles.
 	UpdateInterval time.Duration
 
+	// MinUpdateInterval can be set to >0 to reduce the screen-refresh frequency
+	// even if TriggerUpdate() is called more frequently than every MinUpdateInterval.
+	MinUpdateInterval time.Duration
+
 	// Update is called on every refresh cycle to fill the screen with content.
 	// See also CliLogBox.Update().
 	Update func(out io.Writer, width int) error
@@ -66,10 +70,21 @@ func (t *CliLogBoxTask) Start(wg *sync.WaitGroup) golib.StopChan {
 		Loop: func(stop golib.StopChan) (err error) {
 			err = t.updateBox()
 			if err == nil {
+				// Wait between t.MinUpdateInterval and t.UpdateInterval,
+				// but wake up from stop.WaitChan() and t.updateTrigger.
+				sleepStart := time.Now()
 				select {
 				case <-time.After(t.UpdateInterval):
 				case <-stop.WaitChan():
 				case <-t.updateTrigger:
+				}
+				sleepTime := time.Now().Sub(sleepStart)
+				if diff := t.MinUpdateInterval - sleepTime; diff > 0 {
+					select {
+					// Don't wait for t.updateTrigger here
+					case <-time.After(diff):
+					case <-stop.WaitChan():
+					}
 				}
 			}
 			return
