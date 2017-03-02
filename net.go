@@ -88,6 +88,7 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 			hook()
 		}
 	}()
+	task.LoopTask = task.listen(wg)
 
 	endpoint, err := net.ResolveTCPAddr("tcp", task.ListenEndpoint)
 	if err != nil {
@@ -101,7 +102,6 @@ func (task *TCPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.W
 		start(task.listener.Addr())
 	}
 	hook = nil
-	task.LoopTask = task.listen(wg)
 	return task.LoopTask.Start(wg)
 }
 
