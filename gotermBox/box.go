@@ -3,6 +3,7 @@ package gotermBox
 import (
 	"io"
 
+	"github.com/antongulenko/golib"
 	"github.com/antongulenko/goterm"
 )
 
@@ -42,7 +43,9 @@ func (box *CliLogBox) Init() {
 // which also receives the width of the screen. If it prints lines that are longer than the screen
 // width, they will be cut off. It can produce an arbitrary number of lines.
 func (self *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
-	box := goterm.NewBox(100|goterm.PCT, 100|goterm.PCT, 0)
+	console := golib.GetTerminalSize()
+	box := goterm.NewBox(int(console.Col), int(console.Row), 0)
+
 	box.Height -= 1 // Line with cursor
 	var separator, dots string
 	if self.NoUtf8 {
