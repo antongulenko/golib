@@ -1,6 +1,7 @@
 package golib
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,12 +25,12 @@ type Command struct {
 	// to make log messages more descriptive. Otherwise, the value of the Program field will be used.
 	ShortName string
 
-	// Logdir can be set together with Logfile to redirect the stderr and stdout
+	// LogDir can be set together with Logfile to redirect the stderr and stdout
 	// streams of the subprocess. A suffix is a appended to the given file to make
 	// sure it does not exist.
-	Logdir string
-	// See Logdir
-	Logfile string
+	LogDir string
+	// See LogDir
+	LogFile string
 
 	// Proc will be initialized when calling Start() and points to the running subprocess.
 	Proc *os.Process
@@ -47,16 +48,16 @@ type Command struct {
 // that will be closed after the subprocess exits.
 func (command *Command) Start(wg *sync.WaitGroup) StopChan {
 	process := exec.Command(command.Program, command.Args...)
-	if command.Logdir != "" && command.Logfile != "" {
-		logF, err := openLogfile(command.Logdir, command.Logfile)
+	if command.LogDir != "" && command.LogFile != "" {
+		logF, err := openLogfile(command.LogDir, command.LogFile)
 		if err != nil {
 			return NewStoppedChan(err)
 		}
-		command.Logfile = logF.Name()
+		command.LogFile = logF.Name()
 		process.Stdout = logF
 		process.Stderr = logF
 	} else {
-		command.Logfile = ""
+		command.LogFile = ""
 		process.Stdout = nil
 		process.Stderr = nil
 	}
@@ -97,7 +98,7 @@ func (command *Command) waitForProcess(wg *sync.WaitGroup) {
 	defer wg.Done()
 	state, err := command.Proc.Wait()
 	if state == nil && err == nil {
-		err = fmt.Errorf("No ProcState returned")
+		err = errors.New("No ProcState returned")
 	}
 	command.State, command.StateErr = state, err
 	command.processFinished.StopErr(err)
@@ -107,8 +108,8 @@ func (command *Command) waitForProcess(wg *sync.WaitGroup) {
 // logfile that contains stdout and stderr.
 func (command *Command) String() string {
 	state := command.StateString()
-	if command.Logfile != "" {
-		state += " (" + command.Logfile + ")"
+	if command.LogFile != "" {
+		state += " (" + command.LogFile + ")"
 	}
 	return state
 }
@@ -158,7 +159,7 @@ func (command *Command) StateString() string {
 
 func (command *Command) checkStarted() error {
 	if command == nil || command.Proc == nil {
-		return fmt.Errorf("Command is nil or not started")
+		return errors.New("Command is nil or not started")
 	}
 	return nil
 }

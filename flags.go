@@ -105,7 +105,7 @@ func FormatMap(m map[string]string) string {
 	return FormatOrderedMap(keys, values)
 }
 
-// FormatOrderedMap returns a readable represenataion of the given key-value pairs.
+// FormatOrderedMap returns a readable representation of the given key-value pairs.
 func FormatOrderedMap(keys []string, values []string) string {
 	var buf bytes.Buffer
 	started := false

@@ -7,9 +7,9 @@ import (
 	"github.com/antongulenko/goterm"
 )
 
-// CliLogBox can display a box spanning over the entire comand-line screen
+// CliLogBox can display a box spanning over the entire command-line screen
 // containing arbitrary content that can be updated from outside, and an additional
-// section at the botton containing log messages captured using a LogBuffer.
+// section at the bottom containing log messages captured using a LogBuffer.
 type CliLogBox struct {
 	// LogBuffer provides the underlying functionality for capturing log messages.
 	// CliLogBox acts like an extension of LogBuffer. After calling Init(),
@@ -42,44 +42,44 @@ func (box *CliLogBox) Init() {
 // but should never be called concurrently. The content must be written by the given function,
 // which also receives the width of the screen. If it prints lines that are longer than the screen
 // width, they will be cut off. It can produce an arbitrary number of lines.
-func (self *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
+func (box *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
 	console := golib.GetTerminalSize()
-	box := goterm.NewBox(int(console.Col), int(console.Row), 0)
+	gotermBox := goterm.NewBox(int(console.Col), int(console.Row), 0)
 
-	box.Height -= 1 // Line with cursor
+	gotermBox.Height -= 1 // Line with cursor
 	var separator, dots string
-	if self.NoUtf8 {
-		box.Border = "- | - - - -"
+	if box.NoUtf8 {
+		gotermBox.Border = "- | - - - -"
 		separator = "-"
 		dots = "... "
 	} else {
-		box.Border = "═ ║ ╔ ╗ ╚ ╝"
+		gotermBox.Border = "═ ║ ╔ ╗ ╚ ╝"
 		separator = "═"
 		dots = "··· "
 	}
-	lines := box.Height - 3 // borders + separator
+	lines := gotermBox.Height - 3 // borders + separator
 
-	counter := newlineCounter{out: box}
-	if self.LogLines > 0 {
-		counter.max_lines = lines - self.LogLines
+	counter := newlineCounter{out: gotermBox}
+	if box.LogLines > 0 {
+		counter.max_lines = lines - box.LogLines
 	}
-	writeContent(&counter, box.Width)
+	writeContent(&counter, gotermBox.Width)
 	lines -= counter.num
 
 	if counter.num > 0 {
 		i := 0
 		if counter.truncated {
-			box.Write([]byte(dots))
+			gotermBox.Write([]byte(dots))
 			i += len(dots)
 		}
-		for i := 0; i < box.Width; i++ {
-			box.Write([]byte(separator))
+		for i := 0; i < gotermBox.Width; i++ {
+			gotermBox.Write([]byte(separator))
 		}
-		box.Write([]byte("\n"))
+		gotermBox.Write([]byte("\n"))
 	}
-	self.PrintMessages(box, lines)
+	box.PrintMessages(gotermBox, lines)
 	goterm.MoveCursor(1, 1)
-	goterm.Print(box)
+	goterm.Print(gotermBox)
 	goterm.Flush()
 }
 
@@ -90,8 +90,8 @@ type newlineCounter struct {
 	truncated bool
 }
 
-func (counter *newlineCounter) Write(data []byte) (total int, err error) {
-	total = len(data)
+func (counter *newlineCounter) Write(data []byte) (int, error) {
+	total := len(data)
 	if counter.max_lines <= 0 || counter.num < counter.max_lines {
 		written := 0
 		start := 0
@@ -117,5 +117,5 @@ func (counter *newlineCounter) Write(data []byte) (total int, err error) {
 	} else {
 		counter.truncated = true
 	}
-	return
+	return total, nil
 }

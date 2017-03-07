@@ -13,7 +13,7 @@ var (
 	// dump all running goroutines and exiting when shutting down takes too long.
 	TaskStopTimeout = time.Duration(0)
 
-	// PrintTaskStopWait causes various parts of the TaskGroup functionalty to print
+	// PrintTaskStopWait causes various parts of the TaskGroup functionality to print
 	// debug messages when stopping tasks and waiting for them to finish.
 	PrintTaskStopWait = false
 )
@@ -47,7 +47,7 @@ func (group TaskGroup) StartTasks(wg *sync.WaitGroup) []StopChan {
 }
 
 // Stop stops all tasks in the task group in parallel.
-// Stop blocks until all Stop() invokations of all tasks have returned.
+// Stop blocks until all Stop() invocations of all tasks have returned.
 //
 // If the global PrintTaskStopWait variable is set, a log message
 // is printed before stopping every task.

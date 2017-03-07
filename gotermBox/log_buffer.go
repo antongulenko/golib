@@ -13,7 +13,7 @@ import (
 // and store all messages to a ring-buffer instead of outputting them directly.
 type LogBuffer struct {
 	// PushMessageHook is called each time a message is a added to this LogBuffer,
-	// regardless if it was added from a logger or explicitely over PushMessage().
+	// regardless if it was added from a logger or explicitly over PushMessage().
 	PushMessageHook func(newMessage string)
 
 	messages          *ring.Ring
@@ -45,7 +45,7 @@ func (buf *LogBuffer) PushMessage(msg string) {
 }
 
 // PrintMessages prints all stored messages to the given io.Writer instance,
-// optinoally limiting the number of printed messages through the max_num parameter.
+// optionally limiting the number of printed messages through the max_num parameter.
 func (buf *LogBuffer) PrintMessages(w io.Writer, max_num int) {
 	if max_num <= 0 {
 		return
@@ -62,7 +62,7 @@ func (buf *LogBuffer) PrintMessages(w io.Writer, max_num int) {
 }
 
 // RegisterMessageHook registers a hook for receiving log messages from the default
-// logger of the "github.com/Sirupsen/logrus" pacakge.
+// logger of the "github.com/Sirupsen/logrus" package.
 // This should be called as early as possible in order to not miss any log messages.
 // Any messages created prior to this will not be captured by the LogBuffer.
 func (buf *LogBuffer) RegisterMessageHook() {
@@ -109,6 +109,6 @@ func (buf *LogBuffer) Fire(entry *log.Entry) error {
 type noopWriter struct {
 }
 
-func (noopWriter) Write(p []byte) (n int, err error) {
+func (noopWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }

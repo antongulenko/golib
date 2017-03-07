@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	// ErrorExitHook will be executed when any of the Checkerr, Fatalln or Fatalf
+	// ErrorExitHook will be executed when any of the Checkerr, Fatalln or Fatalf,
 	// functions cause the current process to stop.
 	ErrorExitHook func()
 	_exiting      bool
