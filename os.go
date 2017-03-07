@@ -39,7 +39,7 @@ func ConfigureOpenFilesLimit() {
 		if err := SetOpenFilesLimit(ConfiguredOpenFilesLimit); err != nil {
 			Log.Warnln("Failed to set open files limit to %v: %v", ConfiguredOpenFilesLimit, err)
 		} else {
-			Log.Println("Successfully set open files limit to %v", ConfiguredOpenFilesLimit)
+			Log.Printf("Successfully set open files limit to %v", ConfiguredOpenFilesLimit)
 		}
 	}
 }

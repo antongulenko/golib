@@ -165,8 +165,6 @@ func (task *LoopTask) String() string {
 // This can be used in conjunction with the NoopTask to create a task
 // that automatically stops when the process receives an interrupt signal.
 func ExternalInterrupt() StopChan {
-	// This must be done after starting any subprocess that depends
-	// on the ignore-handler for SIGNIT provided by ./noint
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	stop := NewStopChan()
@@ -187,16 +185,16 @@ func ExternalInterrupt() StopChan {
 // that automatically stops when the user presses the enter key.
 // This should not be user if the standard input is used for different purposes.
 func UserInput() StopChan {
-	userinput := NewStopChan()
+	userInput := NewStopChan()
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		_, err := reader.ReadString('\n')
 		if err != nil {
 			err = fmt.Errorf("Error reading user input: %v", err)
 		}
-		userinput.StopErr(err)
+		userInput.StopErr(err)
 	}()
-	return userinput
+	return userInput
 }
 
 // StdinClosed creates a StopChan that is automatically stopped when the

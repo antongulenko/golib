@@ -13,7 +13,7 @@ type stopChan struct {
 	waitChan chan error
 }
 
-// StopChan is a utility type for coordinating concurrenct goroutines.
+// StopChan is a utility type for coordinating concurrent goroutines.
 // Initially, a StopChan is 'running' and can be stopped exactly once.
 // Goroutines can wait for the StopChan to be stopped and query the current status
 // in various ways.
@@ -79,7 +79,7 @@ func (s *stopChan) StopFunc(perform func()) {
 	})
 }
 
-// StopErr stops the receiving Stopchan, iff it was not already stopped.
+// StopErr stops the receiving StopChan, iff it was not already stopped.
 // The given error value is stored in the StopChan.
 func (s *stopChan) StopErr(err error) {
 	s.StopErrFunc(func() error {
@@ -175,7 +175,7 @@ func (s *stopChan) WaitTimeout(t time.Duration) bool {
 // Execute executes the given function while grabbing the internal lock of the StopChan.
 // This means that no other goroutine can stop the StopChan while the function is running,
 // and that it is mutually exclusive with any of the IfStopped etc. methods.
-// This is sometimes usefull, if the StopChan is used for its locking capabilities.
+// This is sometimes useful, if the StopChan is used for its locking capabilities.
 func (s *stopChan) Execute(execute func()) {
 	if s != nil {
 		s.cond.L.Lock()

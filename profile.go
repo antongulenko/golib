@@ -32,7 +32,7 @@ func RegisterProfileFlags() {
 // output files.
 // It can be used like this:
 //   defer golib.ProfileCpu()()
-func ProfileCpu() (stopProfiling func()) {
+func ProfileCpu() func() {
 	var cpu, mem *os.File
 	var err error
 	if CpuProfileFile != "" {

@@ -3,9 +3,8 @@ package golib
 import (
 	"bytes"
 
-	"golang.org/x/text/width"
-
 	"github.com/lunixbochs/vtclean"
+	"golang.org/x/text/width"
 )
 
 // StringLength returns the number of normalized utf8-runes within the cleaned string.
@@ -13,9 +12,9 @@ import (
 func StringLength(str string) (strlen int) {
 	str = vtclean.Clean(str, false)
 	for str != "" {
-		_, rest, width := ReadRune(str)
+		_, rest, runeWidth := ReadRune(str)
 		str = rest
-		strlen += width
+		strlen += runeWidth
 	}
 	// Alternative:
 	// strlen = utf8.RuneCountInString(str)
@@ -53,14 +52,14 @@ func Substring(str string, iFrom int, iTo int) string {
 	textWidth := 0
 	cleanedLen := 0
 	for str != "" && textWidth < iFrom {
-		runeStr, rest, width := ReadRune(str)
+		runeStr, rest, runeWidth := ReadRune(str)
 		buf.Write([]byte(runeStr))
 
 		cleaned := vtclean.Clean(buf.String(), false)
 		if len(cleaned) > cleanedLen {
 			// A visible rune was added
 			cleanedLen = len(cleaned)
-			textWidth += width
+			textWidth += runeWidth
 		}
 		if textWidth >= iFrom {
 			break
@@ -78,21 +77,21 @@ func Substring(str string, iFrom int, iTo int) string {
 	textWidth = 0
 	cleanedLen = 0
 	for str != "" && textWidth < iLen {
-		runeStr, rest, width := ReadRune(str)
+		runeStr, rest, runeWidth := ReadRune(str)
 		buf.Write([]byte(runeStr))
 
 		cleaned := vtclean.Clean(buf.String(), false)
 		if len(cleaned) > cleanedLen {
 			// A visible rune was added
 			cleanedLen = len(cleaned)
-			textWidth += width
+			textWidth += runeWidth
 		}
 		if len(cleaned) != buf.Len() {
 			// Contains invisible escape characters, possibly color codes
 			possibleColor = true
 		}
 		if textWidth > iLen {
-			if width == 2 {
+			if runeWidth == 2 {
 				// Splitting wide character in the end, pad with a space
 				suffix[to] = ' '
 				to++
