@@ -1,2 +1,2 @@
 # golib
-Useful helper types and functions for Go
+Useful helper types and functions for Go (Golang).
