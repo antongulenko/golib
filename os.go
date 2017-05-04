@@ -1,19 +1,12 @@
 package golib
 
 import (
-	"flag"
-	"os"
 	"sync"
-	"syscall"
-	"unsafe"
+
+	"github.com/nsf/termbox-go"
 )
 
 var (
-	// ConfiguredOpenFilesLimit is used by ConfigureOpenFilesLimit() to try to configure allowed the number
-	// of open files for the current process. It is set by the '-ofl' flag created by the RegisterOFLFlags()
-	// function.
-	ConfiguredOpenFilesLimit uint64
-
 	// DefaultTerminalWindowSize is used as a default result by GetTerminalSize() if the real
 	// terminal size cannot be determined.
 	DefaultTerminalWindowSize = TerminalWindowSize{
@@ -25,34 +18,6 @@ var (
 
 	warnTerminalSizeOnce sync.Once
 )
-
-// RegisterOFLFlags registers a flag to configure the ConfiguredOpenFilesLimit global variable.
-func RegisterOFLFlags() {
-	flag.Uint64Var(&ConfiguredOpenFilesLimit, "ofl", ConfiguredOpenFilesLimit,
-		"Set to >0 for configuring the open files limit (only possible as root)")
-}
-
-// ConfigureOpenFilesLimit calls SetOpenFilesLimit() with ConfiguredOpenFilesLimit as parameter,
-// if ConfiguredOpenFilesLimit is set to a values > 0.
-func ConfigureOpenFilesLimit() {
-	if ConfiguredOpenFilesLimit > 0 {
-		if err := SetOpenFilesLimit(ConfiguredOpenFilesLimit); err != nil {
-			Log.Warnln("Failed to set open files limit to %v: %v", ConfiguredOpenFilesLimit, err)
-		} else {
-			Log.Printf("Successfully set open files limit to %v", ConfiguredOpenFilesLimit)
-		}
-	}
-}
-
-// SetOpenFilesLimit tries to set the maximum number of open files for the current process to the
-// given number.
-func SetOpenFilesLimit(ulimit uint64) error {
-	rLimit := syscall.Rlimit{
-		Max: ulimit,
-		Cur: ulimit,
-	}
-	return syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-}
 
 // TerminalWindowSize contains known bounds in rows, columns and pixels of the console
 // behind the standard output.
@@ -67,13 +32,12 @@ type TerminalWindowSize struct {
 // the standard output.
 func GetTerminalSizeErr() (TerminalWindowSize, error) {
 	var ws TerminalWindowSize
-	res, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdin),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(&ws)))
-	if res < 0 || errno != 0 {
-		return TerminalWindowSize{}, os.NewSyscallError("GetWinsize", errno)
+	if err := termbox.Init(); err != nil {
+		return ws, err
 	}
+	w, h := termbox.Size()
+	ws.Col, ws.Row = uint16(w), uint16(h)
+	termbox.Close()
 	return ws, nil
 }
 

@@ -21,9 +21,6 @@ const (
 
 	// FlagsTasks enables flags that help debugging the shutdown sequence Tasks and TaskGroups.
 	FlagsTasks
-
-	// FlagsOFL enables flags the configure the open files limit.
-	FlagsOFL
 )
 
 // RegisterFlags registers various flags provided by the golib package, controlled
@@ -37,9 +34,6 @@ func RegisterFlags(flags Flags) {
 	}
 	if flags&FlagsTasks != 0 {
 		RegisterTaskFlags()
-	}
-	if flags&FlagsOFL != 0 {
-		RegisterOFLFlags()
 	}
 }
 
