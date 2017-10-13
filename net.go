@@ -172,3 +172,154 @@ func (task *TCPListenerTask) stop() {
 		_ = listener.Close() // Drop error
 	}
 }
+
+// ==================== UDP listener task ====================
+
+var DefaultUdpPacketSize = 2048
+
+// UDPConnectionHandler is a callback function for UDPListenerTask, which is
+// invoked whenever a new UDP packet is received.
+type UDPPacketHandler func(wg *sync.WaitGroup, localAddr net.Addr, remoteAddr *net.UDPAddr, packet []byte)
+
+// UDPListenerTask is an implementation of the Task interface that listens
+// for incoming UDP packets on a given UDP endpoint. A handler function
+// is invoked for every received UDP packet, and an optional hook can be
+// executed when the UDP socket is closed and the task stops.
+type UDPListenerTask struct {
+	*LoopTask
+
+	// ListenEndpoint is the UDP endpoint to open a UDP listening socket on.
+	ListenEndpoint string
+
+	// Handler is a required callback-function that will be called for every
+	// received UDP packet. It is not called in a separate
+	// goroutine, so it should fork a new routine for long-running operations.
+	// The handler is always executed while the StopChan in the underlying
+	// LoopTask is locked.
+	Handler UDPPacketHandler
+
+	// StopHook is an optional callback that is invoked after the task stops and
+	// the listening UDP socket is closed. When StopHook is executed, the underlying
+	// LoopTask/StopChan is NOT locked, so helper methods like Execute() must be used
+	// if synchronization is required.
+	StopHook func()
+
+	// The size of the buffer to receive UDP packets into. If the buffer size is smaller
+	// than incoming packets, the UDPPacketHandler might be invoked multiple times with
+	// different UDP packet fragments. The value of DefaultUdpPacketSize is used if this is
+	// to <=0.
+	PacketBufferSize int
+
+	listener *net.UDPConn
+}
+
+// String implements the Task interface by returning a descriptive string.
+func (task *UDPListenerTask) String() string {
+	return "UDP listener " + task.ListenEndpoint
+}
+
+// Start implements the Task interface. It opens the UDP listen socket and
+// starts accepting incoming packets.
+func (task *UDPListenerTask) Start(wg *sync.WaitGroup) StopChan {
+	return task.ExtendedStart(nil, wg)
+}
+
+// ExtendedStart creates the UDP listen socket and starts receiving incoming packets.
+// In addition, a hook function can be defined that will be called once after the
+// socket has been opened successfully and is passed the resolved address of the UDP endpoint.
+func (task *UDPListenerTask) ExtendedStart(start func(addr net.Addr), wg *sync.WaitGroup) StopChan {
+	hook := task.StopHook
+	defer func() {
+		if hook != nil {
+			hook()
+		}
+	}()
+	task.LoopTask = task.listen(wg)
+
+	endpoint, err := net.ResolveUDPAddr("udp", task.ListenEndpoint)
+	if err != nil {
+		return NewStoppedChan(err)
+	}
+	task.listener, err = net.ListenUDP("udp", endpoint)
+	if err != nil {
+		return NewStoppedChan(err)
+	}
+	if start != nil {
+		start(task.listener.LocalAddr())
+	}
+	hook = nil
+	return task.LoopTask.Start(wg)
+}
+
+func (task *UDPListenerTask) listen(wg *sync.WaitGroup) *LoopTask {
+	return &LoopTask{
+		Description: "udp listener on " + task.ListenEndpoint,
+		StopHook:    task.StopHook,
+		Loop: func(stop StopChan) error {
+			if listener := task.listener; listener == nil {
+				return StopLoopTask
+			} else {
+				// TODO recycle these buffers for performance
+				bufLen := task.PacketBufferSize
+				if bufLen <= 0 {
+					bufLen = DefaultUdpPacketSize
+				}
+				buf := make([]byte, bufLen)
+				num, remoteAddr, err := listener.ReadFromUDP(buf)
+				buf = buf[:num]
+				if err != nil {
+					if task.listener != nil {
+						Log.Errorln("Error accepting UDP packet:", err)
+					}
+				} else {
+					stop.IfNotStopped(func() {
+						task.Handler(wg, listener.LocalAddr(), remoteAddr, buf)
+					})
+				}
+			}
+			return nil
+		},
+	}
+}
+
+// StopErrFunc extends the StopErrFunc() function inherited from LoopTask/StopChan and additionally
+// closes the UDP listening socket.
+func (task *UDPListenerTask) StopErrFunc(perform func() error) {
+	task.LoopTask.StopErrFunc(func() error {
+		task.stop()
+		return perform()
+	})
+}
+
+// StopFunc extends the StopFunc() function inherited from LoopTask/StopChan and additionally
+// closes the UDP listening socket.
+func (task *UDPListenerTask) StopFunc(perform func()) {
+	task.LoopTask.StopFunc(func() {
+		task.stop()
+		perform()
+	})
+}
+
+// StopErr extends the StopErr() function inherited from LoopTask/StopChan and additionally
+// closes the UDP listening socket.
+func (task *UDPListenerTask) StopErr(err error) {
+	task.LoopTask.StopErrFunc(func() error {
+		task.stop()
+		return err
+	})
+}
+
+// Stop extends the Stop() function inherited from LoopTask/StopChan and additionally
+// closes the UDP listening socket.
+func (task *UDPListenerTask) Stop() {
+	task.LoopTask.StopFunc(func() {
+		task.stop()
+	})
+}
+
+func (task *UDPListenerTask) stop() {
+	if listener := task.listener; listener != nil {
+		task.listener = nil  // Will be checked when returning from AcceptTCP()
+		_ = listener.Close() // Drop error
+	}
+}
