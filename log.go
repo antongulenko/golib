@@ -6,7 +6,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/chris-garrett/lfshook"
+	"github.com/antongulenko/lfshook"
 )
 
 var (
