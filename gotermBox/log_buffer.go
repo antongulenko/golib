@@ -6,10 +6,10 @@ import (
 	"io"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
-// LogBuffer can be used to intercept the default logger of the "github.com/Sirupsen/logrus" package
+// LogBuffer can be used to intercept the default logger of the "github.com/sirupsen/logrus" package
 // and store all messages to a ring-buffer instead of outputting them directly.
 type LogBuffer struct {
 	// PushMessageHook is called each time a message is a added to this LogBuffer,
@@ -62,14 +62,14 @@ func (buf *LogBuffer) PrintMessages(w io.Writer, max_num int) {
 }
 
 // RegisterMessageHook registers a hook for receiving log messages from the default
-// logger of the "github.com/Sirupsen/logrus" package.
+// logger of the "github.com/sirupsen/logrus" package.
 // This should be called as early as possible in order to not miss any log messages.
 // Any messages created prior to this will not be captured by the LogBuffer.
 func (buf *LogBuffer) RegisterMessageHook() {
 	log.StandardLogger().Hooks.Add(buf)
 }
 
-// InterceptLogger makes the default logger of the "github.com/Sirupsen/logrus" package
+// InterceptLogger makes the default logger of the "github.com/sirupsen/logrus" package
 // stop logging to its real output. The original logging output is stored, so it
 // can be restored later with RestoreLogger().
 func (buf *LogBuffer) InterceptLogger() {
@@ -78,7 +78,7 @@ func (buf *LogBuffer) InterceptLogger() {
 }
 
 // RestoreLogger restored the original logger output of the default logger of the
-// "github.com/Sirupsen/logrus" package. InterceptLogger() must have been called
+// "github.com/sirupsen/logrus" package. InterceptLogger() must have been called
 // prior to this.
 func (buf *LogBuffer) RestoreLogger() {
 	log.StandardLogger().Out = buf.originalLoggerOut

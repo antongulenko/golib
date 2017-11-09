@@ -13,7 +13,7 @@ const (
 	// FlagsAll makes RegisterFlags() enable all available flags.
 	FlagsAll = 0xffffffff
 
-	// FlagsLog enables flags that configure the logger (Package github.com/Sirupsen/logrus).
+	// FlagsLog enables flags that configure the logger (Package github.com/sirupsen/logrus).
 	FlagsLog = 1 << iota
 
 	// FlagsProfile enables flags the configure profiling of CPU and memory.
