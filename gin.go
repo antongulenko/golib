@@ -41,3 +41,12 @@ func ginRecover(c *gin.Context) {
 	}()
 	c.Next()
 }
+
+func GinTask(engine *gin.Engine, addr string) Task {
+	return &NoopTask{
+		Chan: WaitErrFunc(nil, func() error {
+			return engine.Run(addr)
+		}),
+		Description: "HTTP server on " + addr,
+	}
+}
