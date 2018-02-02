@@ -1,12 +1,14 @@
 package golib
 
 import (
+	"bytes"
 	"flag"
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/antongulenko/lfshook"
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -30,9 +32,11 @@ var (
 	// Log is the package-wide logger for the golib package. It can be configured or disabled.
 	Log = &log.Logger{
 		Out: os.Stderr,
-		Formatter: &log.TextFormatter{
-			FullTimestamp:   true,
-			TimestampFormat: time.StampMilli,
+		Formatter: &myFormatter{
+			f: log.TextFormatter{
+				FullTimestamp:   true,
+				TimestampFormat: time.StampMilli,
+			},
 		},
 		Hooks: make(log.LevelHooks),
 		Level: log.DebugLevel,
@@ -77,16 +81,34 @@ func ConfigureLogging() {
 		formatter := newLogFormatter()
 		hook.SetFormatter(formatter)
 		// HACK: force the formatter to use colored output in the file
-		formatter.DisableColors = false
-		formatter.ForceColors = true
+		formatter.f.DisableColors = false
+		formatter.f.ForceColors = true
 		log.AddHook(hook)
 	}
 }
 
-func newLogFormatter() *log.TextFormatter {
-	return &log.TextFormatter{
-		ForceColors:     true,
-		FullTimestamp:   true,
-		TimestampFormat: time.StampMilli,
+func newLogFormatter() *myFormatter {
+	return &myFormatter{
+		f: log.TextFormatter{
+			ForceColors:     true,
+			FullTimestamp:   true,
+			TimestampFormat: time.StampMilli,
+		},
 	}
+}
+
+type myFormatter struct {
+	f logrus.TextFormatter
+}
+
+func (f *myFormatter) Format(e *logrus.Entry) ([]byte, error) {
+	text, err := f.f.Format(e)
+	if err != nil {
+		return text, err
+	}
+	// Remove all whitespace and replace with a single trailing newline character
+	// Many libraries explicitely add a \n character to log lines, which leads to empty lines.
+	text = bytes.TrimSpace(text)
+	text = append(text, '\n')
+	return text, nil
 }
