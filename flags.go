@@ -88,6 +88,36 @@ func (k *KeyValueStringSlice) Map() map[string]string {
 	return result
 }
 
+// Put sets the given value to the first instance of the given key. All other instances of the
+// given key remain unchanged. If the key is not yet present in the receiver, the new key-value pair
+// is appended.
+func (k *KeyValueStringSlice) Put(key, value string) {
+	for i, storedKey := range k.Keys {
+		if storedKey == key {
+			k.Values[i] = value
+			return
+		}
+	}
+	k.Keys = append(k.Keys, key)
+	k.Values = append(k.Values, value)
+}
+
+// Delete deletes all instances of the given key from the receiving KeyValueStringSlice. If the key
+// is not present, the receiver remains unchanged.
+func (k *KeyValueStringSlice) Delete(key string) {
+	for i := 0; i < len(k.Keys); i++ {
+		if k.Keys[i] == key {
+			k.Keys = k.deleteIndex(i, k.Keys)
+			k.Values = k.deleteIndex(i, k.Values)
+		}
+	}
+}
+
+func (k *KeyValueStringSlice) deleteIndex(i int, slice []string) []string {
+	copy(slice[i:], slice[i+1:])
+	return slice[:len(slice)-1]
+}
+
 // FormatMap returns a readable representation of the given string map.
 func FormatMap(m map[string]string) string {
 	keys := make([]string, 0, len(m))
