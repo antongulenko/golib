@@ -1,6 +1,11 @@
 package golib
 
 import (
+	"bufio"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/signal"
 	"reflect"
 	"sync"
 	"time"
@@ -302,16 +307,78 @@ func WaitForAny(channels []StopChan) int {
 	}
 	// Use reflect package to wait for any of the given channels
 	var cases []reflect.SelectCase
+	validCases := 0
 	for _, ch := range channels {
-		if ch.stopChan != nil {
-			waitChan := ch.WaitChan()
-			refCase := reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(waitChan)}
-			cases = append(cases, refCase)
+		var waitChan <-chan error
+		if ch.stopChan == nil {
+			// Channel that never returns. This dummy channel is used to make the
+			// return value consistent (index of the channel closed in the select statement)
+			waitChan = make(chan error, 1)
+		} else {
+			validCases++
+			waitChan = ch.WaitChan()
 		}
+
+		refCase := reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(waitChan)}
+		cases = append(cases, refCase)
 	}
-	if len(cases) == 0 {
+	if validCases == 0 {
 		return -1
 	}
 	choice, _, _ := reflect.Select(cases)
 	return choice
+}
+
+// ExternalInterrupt creates a StopChan that is automatically stopped as soon
+// as an interrupt signal (like pressing Ctrl-C) is received.
+// This can be used in conjunction with the NoopTask to create a task
+// that automatically stops when the process receives an interrupt signal.
+func ExternalInterrupt() StopChan {
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	stop := NewStopChan()
+	go func() {
+		defer signal.Stop(interrupt)
+		select {
+		case <-interrupt:
+			stop.Stop()
+		case <-stop.WaitChan():
+		}
+	}()
+	return stop
+}
+
+// UserInput creates a StopChan that is automatically stopped when the
+// a newline character is received on os.Stdin.
+// This can be used in conjunction with the NoopTask to create a task
+// that automatically stops when the user presses the enter key.
+// This should not be used if the standard input is used for different purposes.
+func UserInput() StopChan {
+	userInput := NewStopChan()
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		_, err := reader.ReadString('\n')
+		if err != nil {
+			err = fmt.Errorf("Error reading user input: %v", err)
+		}
+		userInput.StopErr(err)
+	}()
+	return userInput
+}
+
+// StdinClosed creates a StopChan that is automatically stopped when the
+// standard input stream is closed.
+// This can be used in conjunction with the NoopTask to create a task
+// that automatically stops when the user presses Ctrl-D or stdin is closed for any other reason.
+// This should not be user if the standard input is used for different purposes.
+func StdinClosed() StopChan {
+	closed := NewStopChan()
+	go func() {
+		_, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			err = fmt.Errorf("Error reading stdin: %v", err)
+		}
+		closed.StopErr(err)
+	}()
+	return closed
 }

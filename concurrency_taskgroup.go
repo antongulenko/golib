@@ -2,8 +2,6 @@ package golib
 
 import (
 	"flag"
-	"os"
-	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -16,6 +14,10 @@ var (
 	// PrintTaskStopWait causes various parts of the TaskGroup functionality to print
 	// debug messages when stopping tasks and waiting for them to finish.
 	PrintTaskStopWait = false
+
+	// PanicOnTaskTimeout controls, whether the WaitAndStop() method of TaskGroup
+	// generates a panic in case of a timeout.
+	PanicOnTaskTimeout = true
 )
 
 // RegisterTaskFlags registers flags for controlling the global variables
@@ -26,7 +28,7 @@ func RegisterTaskFlags() {
 	flag.DurationVar(&TaskStopTimeout, "debug-task-timeout", TaskStopTimeout, "Timeout duration when stopping and waiting for tasks to finish")
 }
 
-// TaskGroup is a collection of tasks that can be started and stopped together.
+// TaskGroup is a collection of stoppable tasks that can be started and stopped together.
 // The purpose of this type is to coordinate the startup and shutdown sequences
 // of multiple parts of one application or object.
 type TaskGroup []Task
@@ -77,25 +79,35 @@ func (group TaskGroup) Stop() {
 // Afterwards, the task that caused the shutdown is returned, as well as the number
 // of errors encountered.
 //
-// If the timeout parameters is >0, all goroutines will be dumped to the standard output
+// If the timeout parameter is >0, a timer will be started before stopping all tasks.
+// After the timer expires, all goroutines will be dumped to the standard output
 // and the program will terminate. This can be used to debug the task shutdown sequence,
-// in case one task does not shut down properly.
+// in case one task does not shut down properly, e.g. due to a deadlock.
 func (group TaskGroup) WaitAndStop(timeout time.Duration) (Task, int) {
 	var wg sync.WaitGroup
 	channels := group.StartTasks(&wg)
 	reason := WaitForAny(channels)
+	if reason == -1 {
+		return nil, -1
+	}
+	exited := false
 	if timeout > 0 {
 		time.AfterFunc(timeout, func() {
-			pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
-			panic("Waiting for stopping goroutines timed out")
+			if !exited {
+				DumpGoroutineStacks()
+				if PanicOnTaskTimeout {
+					panic("Waiting for stopping goroutines timed out")
+				}
+			}
 		})
 	}
 	group.Stop()
 	wg.Wait()
-
 	numErrors := group.CollectErrors(channels, func(err error) {
 		Log.Errorln(err)
 	})
+	exited = true
+
 	return group[reason], numErrors
 }
 

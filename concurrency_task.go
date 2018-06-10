@@ -1,28 +1,20 @@
 package golib
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"os/signal"
 	"sync"
+	"time"
 )
 
-// Task is an interface for coordinates setup and teardown of applications or objects.
-// The Task interface defines a simple lifecycle. First, it is started through Start().
-// It runs until it finishes or produces an error. After any of these, the StopChan returned
-// from the Start() method must be stopped. When the Stop() method is called, the Task
-// must shutdown on-demand. In that case, the StopChan must also be stopped.
-//
-// When the StopChan is stopped, the Task must be completely inactive, including exiting any
-// goroutines that have been created for its operation.
-type Task interface {
+// Startable objects can be started and notify a controlling instance when they finish.
+// The main interface for this is the Task interface. The Startable interface is extracted
+// to make the signature of the Start() method reusable.
+type Startable interface {
 
 	// The Start() method will be called exactly once and should fully initialize and start
 	// the underlying task. If this involves creating goroutines, they should be registered
-	// in the given *sync.WaitGroup. The resulting StopChan must be closed when the task finishes,
+	// in the given *sync.WaitGroup. The resulting StopChan must be closed by the task when it finishes,
 	// optionally logging an error explaining the reason for stopping prematurely.
 	// When stopping, all goroutines must exit as well, reducing the counter in the WaitGroup.
 	//
@@ -31,6 +23,17 @@ type Task interface {
 	//
 	// If an error happens immediately inside the Start() method, NewStoppedChan(err) should be returned.
 	Start(wg *sync.WaitGroup) StopChan
+}
+
+// Task is an interface for coordinated setup and teardown of applications or objects.
+// The Task interface defines a simple lifecycle. First, it is started through Start().
+// It runs until it finishes or produces an error. After any of these, the StopChan returned
+// from the Start() method must be stopped by the task.
+//
+// When the StopChan is stopped, the Task must be completely inactive, including exiting any
+// goroutines that have been created for its operation.
+type Task interface {
+	Startable
 
 	// Stop should be idempotent and cause the underlying task to stop on-demand.
 	// It might be called multiple times, and it might also be called if the StopChan
@@ -160,56 +163,75 @@ func (task *LoopTask) String() string {
 	return fmt.Sprintf("LoopTask(%s)", task.Description)
 }
 
-// ExternalInterrupt creates a StopChan that is automatically stopped as soon
-// as an interrupt signal (like pressing Ctrl-C) is received.
-// This can be used in conjunction with the NoopTask to create a task
-// that automatically stops when the process receives an interrupt signal.
-func ExternalInterrupt() StopChan {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-	stop := NewStopChan()
-	go func() {
-		defer signal.Stop(interrupt)
-		select {
-		case <-interrupt:
-			stop.Stop()
-		case <-stop.WaitChan():
-		}
-	}()
-	return stop
+// TimeoutTask is a Task that automatically fails after a predifined time.
+// If the task is stopped before the timeout expires, no errors is logged.
+// If DumpGoroutines is set to true, all running goroutines will be printed when
+// a timeout occurs.
+type TimeoutTask struct {
+	Timeout        time.Duration
+	ErrorMessage   string
+	DumpGoroutines bool
+
+	stopper StopChan
 }
 
-// UserInput creates a StopChan that is automatically stopped when the
-// a newline character is received on os.Stdin.
-// This can be used in conjunction with the NoopTask to create a task
-// that automatically stops when the user presses the enter key.
-// This should not be user if the standard input is used for different purposes.
-func UserInput() StopChan {
-	userInput := NewStopChan()
+// Start implements the Task interface
+func (t *TimeoutTask) Start(wg *sync.WaitGroup) StopChan {
+	t.stopper = NewStopChan()
+	wg.Add(1)
 	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		_, err := reader.ReadString('\n')
-		if err != nil {
-			err = fmt.Errorf("Error reading user input: %v", err)
+		defer wg.Done()
+		if t.stopper.WaitTimeout(t.Timeout) {
+			if t.DumpGoroutines {
+				DumpGoroutineStacks()
+			}
+			msg := fmt.Sprintf("Timeout after %v", t.Timeout)
+			if t.ErrorMessage != "" {
+				msg += ": " + t.ErrorMessage
+			}
+			t.stopper.StopErr(errors.New(msg))
 		}
-		userInput.StopErr(err)
 	}()
-	return userInput
+	return t.stopper
 }
 
-// StdinClosed creates a StopChan that is automatically stopped when the
-// standard input stream is closed.
-// This can be used in conjunction with the NoopTask to create a task
-// that automatically stops when the user presses Ctrl-D or stdin is closed for any other reason.
-// This should not be user if the standard input is used for different purposes.
-func StdinClosed() StopChan {
-	closed := NewStopChan()
-	go func() {
-		_, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			err = fmt.Errorf("Error reading stdin: %v", err)
-		}
-		closed.StopErr(err)
-	}()
-	return closed
+// Stop implements the Task interface
+func (t *TimeoutTask) Stop() {
+	t.stopper.Stop()
+}
+
+// Stop implements the Task interface
+func (t *TimeoutTask) String() string {
+	msg := fmt.Sprintf("Timeout (%v)", t.Timeout)
+	if t.ErrorMessage != "" {
+		msg += ": " + t.ErrorMessage
+	}
+	return msg
+}
+
+// ExternalInterruptTask returns a Task that automatically stops when
+// the SIGINT signal is received (e.g. by pressing Ctrl-C).
+func ExternalInterruptTask() *NoopTask {
+	return &NoopTask{
+		Chan:        ExternalInterrupt(),
+		Description: "SIGINT received",
+	}
+}
+
+// UserInputTask returns a Task that automatically stops when a newline
+// character is received on the standard input (See UserInput()).
+func UserInputTask() *NoopTask {
+	return &NoopTask{
+		Chan:        UserInput(),
+		Description: "Newline received on stdin",
+	}
+}
+
+// StdinClosedTask returns a Task that automatically stops when the standard
+// input stream is closed.
+func StdinClosedTask() *NoopTask {
+	return &NoopTask{
+		Chan:        StdinClosed(),
+		Description: "Stdin closed",
+	}
 }

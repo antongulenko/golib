@@ -3,6 +3,7 @@ package golib
 import (
 	"fmt"
 	"os"
+	"runtime/pprof"
 )
 
 var (
@@ -61,4 +62,8 @@ func Printerr(err error) {
 	if err != nil {
 		Log.Errorln(err)
 	}
+}
+
+func DumpGoroutineStacks() {
+	pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 }
