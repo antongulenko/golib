@@ -54,6 +54,12 @@ func NewStoppedChan(err error) StopChan {
 	return res
 }
 
+// IsNil returns true, if the receiving StopChan is its nil-values. See the StopChan
+// documentation for details on the behavior of the nil value.
+func (s *stopChan) IsNil() bool {
+	return s == nil
+}
+
 // StopErrFunc stops the receiving StopChan, iff it is not already stopped.
 // In that case, the given function is executed and the resulting error value
 // is stored within the StopChan.
