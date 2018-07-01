@@ -172,14 +172,54 @@ func (s *stopChan) WaitChan() <-chan error {
 //  1. Return true means the wait timed out and the StopChan is still active.
 //  2. Return false means the StopChan was stopped before the timeout expired.
 func (s *stopChan) WaitTimeout(t time.Duration) bool {
+	return s.WaitTimeoutPrecise(t, 1, nil)
+}
+
+// WaitTimeoutLoop behaves like WaitTimeout, but tries to achieve a more precise timeout timing
+// by waking up frequently and checking the passed sleep time.
+// The wakeupFactor parameter must be in ]0..1] or it is adjusted to 1. It is multiplied with the totalDuration
+// to determine the sleep duration of intermediate sleeps for increasing the sleep duration accuracy in high-load situations.
+// For example, a wakeupFactor of 0.1 will lead to 10 intermediate wakeups that check if the desired sleep time has passd already.
+// If the lastTime parameter is not nil and not zero, the sleep time will be counted not from time.Now(), but from the stored time.
+// If the lastTime parameter is not zero, the current time is stoerd into it before returning.
+func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor float64, lastTime *time.Time) bool {
 	if s == nil {
 		return false
 	}
-	select {
-	case <-time.After(t):
-		return true
-	case <-s.WaitChan():
-		return false
+	var end time.Time
+	now := time.Now()
+	if lastTime == nil || lastTime.IsZero() || now.Before(*lastTime) {
+		end = now.Add(totalTimeout)
+	} else {
+		end = (*lastTime).Add(totalTimeout)
+		totalTimeout = end.Sub(now)
+		if totalTimeout <= 0 {
+			return !s.Stopped()
+		}
+	}
+
+	waitChan := s.WaitChan()
+	if wakeupFactor <= 0 || wakeupFactor > 1 {
+		wakeupFactor = 1
+	}
+	subTimeout := time.Duration(float64(totalTimeout) * wakeupFactor)
+
+	for {
+		select {
+		case <-time.After(subTimeout):
+			now := time.Now()
+			leftTime := end.Sub(now)
+			if leftTime <= 0 {
+				if lastTime != nil {
+					*lastTime = now
+				}
+				return true
+			} else if subTimeout < leftTime {
+				subTimeout = leftTime
+			}
+		case <-waitChan:
+			return false
+		}
 	}
 }
 
