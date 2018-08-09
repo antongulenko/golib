@@ -181,17 +181,24 @@ func (s *stopChan) WaitTimeout(t time.Duration) bool {
 // to determine the sleep duration of intermediate sleeps for increasing the sleep duration accuracy in high-load situations.
 // For example, a wakeupFactor of 0.1 will lead to 10 intermediate wakeups that check if the desired sleep time has passd already.
 // If the lastTime parameter is not nil and not zero, the sleep time will be counted not from time.Now(), but from the stored time.
-// If the lastTime parameter is not zero, the current time is stoerd into it before returning.
-func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor float64, lastTime *time.Time) bool {
+// If the lastTime parameter is not zero, the current time is stored into it before returning.
+func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor float64, lastTimePointer *time.Time) bool {
 	if s == nil {
 		return false
 	}
-	var end time.Time
 	now := time.Now()
-	if lastTime == nil || lastTime.IsZero() || now.Before(*lastTime) {
+
+	var lastTime time.Time
+	if lastTimePointer != nil {
+		lastTime = *lastTimePointer
+		*lastTimePointer = now
+	}
+
+	var end time.Time
+	if lastTime.IsZero() || now.Before(lastTime) {
 		end = now.Add(totalTimeout)
 	} else {
-		end = (*lastTime).Add(totalTimeout)
+		end = lastTime.Add(totalTimeout)
 		totalTimeout = end.Sub(now)
 		if totalTimeout <= 0 {
 			return !s.Stopped()
@@ -210,11 +217,8 @@ func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor f
 			now := time.Now()
 			leftTime := end.Sub(now)
 			if leftTime <= 0 {
-				if lastTime != nil {
-					*lastTime = now
-				}
 				return true
-			} else if subTimeout < leftTime {
+			} else if leftTime < subTimeout {
 				subTimeout = leftTime
 			}
 		case <-waitChan:
