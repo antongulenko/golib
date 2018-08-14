@@ -190,8 +190,11 @@ func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor f
 
 	var lastTime time.Time
 	if lastTimePointer != nil {
+		defer func() {
+			// The now time might be changed in the loop below
+			*lastTimePointer = now
+		}()
 		lastTime = *lastTimePointer
-		*lastTimePointer = now
 	}
 
 	var end time.Time
@@ -214,7 +217,7 @@ func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor f
 	for {
 		select {
 		case <-time.After(subTimeout):
-			now := time.Now()
+			now = time.Now()
 			leftTime := end.Sub(now)
 			if leftTime <= 0 {
 				return true
