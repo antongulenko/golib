@@ -1,6 +1,11 @@
 package golib
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+	"unsafe"
+)
 
 type BoolCondition struct {
 	*sync.Cond
@@ -58,4 +63,47 @@ func (cond *BoolCondition) WaitAndUnset() {
 			return
 		}
 	}
+}
+
+// Inspired from: https://gist.github.com/zviadm/c234426882bfc8acba88f3503edaaa36#file-cond2-go
+
+// Like sync.Cond, but supports WaitTimeout() instead of Signal()
+type TimeoutCond struct {
+	L sync.Locker
+	n unsafe.Pointer
+}
+
+func NewTimeoutCond(l sync.Locker) *TimeoutCond {
+	c := &TimeoutCond{L: l}
+	n := make(chan struct{})
+	c.n = unsafe.Pointer(&n)
+	return c
+}
+
+func (c *TimeoutCond) Wait() {
+	n := c.notifyChan()
+	c.L.Unlock()
+	<-n
+	c.L.Lock()
+}
+
+func (c *TimeoutCond) WaitTimeout(t time.Duration) {
+	n := c.notifyChan()
+	c.L.Unlock()
+	select {
+	case <-n:
+	case <-time.After(t):
+	}
+	c.L.Lock()
+}
+
+func (c *TimeoutCond) notifyChan() <-chan struct{} {
+	ptr := atomic.LoadPointer(&c.n)
+	return *((*chan struct{})(ptr))
+}
+
+func (c *TimeoutCond) Broadcast() {
+	n := make(chan struct{})
+	ptrOld := atomic.SwapPointer(&c.n, unsafe.Pointer(&n))
+	close(*(*chan struct{})(ptrOld))
 }
