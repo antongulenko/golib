@@ -70,34 +70,51 @@ func DumpGoroutineStacks() {
 	pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
 }
 
-// IsHashbangExecution checks, if the current process was started in one of the following forms:
-//   /path/to/EXECUTABLE executable-script-file
-//   EXECUTABLE "-flag1 -flag2 arg1 arg2" executable-script-file
+// ParseHashbangArgs checks, if the current process was started in one of the following forms:
+//   /path/to/EXECUTABLE executable-script-file <additional args>...
+//   EXECUTABLE "-flag1 -flag2 arg1 arg2" executable-script-file <additional args>...
 // These forms are used by the OS when running an executable script that has a first line like one of the following:
 //   #!/usr/bin/env EXECUTABLE
 //   #!/path/to/EXECUTABLE -flag1 -flag2 arg1 arg2
-func IsHashbangExecution() bool {
-	if len(os.Args) == 2 || len(os.Args) == 3 {
-		scriptFile := os.Args[len(os.Args)-1]
-		info, err := os.Stat(scriptFile)
-		return err == nil && info.Mode().IsRegular() && (info.Mode()&0111) != 0
+// The <additional args> are passed to the process from the command line when executing the hashbang script.
+//
+// The hashbang execution is determined by checking if the first or second parameter is an executable file.
+// If the executable file is on the second parameter, the first parameter is split based on syntax rules of /bin/sh,
+// and the modified arguments are written back into the given slice (which usually should be &os.Args).
+// This allows specifying multiple parameters in the hashbang header of a script, which are usually passed into the
+// executable as one single parameter string.
+//
+// The return value is the index of the script file in the argument slice. If it is 0, no hashbang execution was detected.
+func ParseHashbangArgs(argsPtr *[]string) int {
+	args := *argsPtr
+	if len(args) <= 1 {
+		return 0
 	}
-	return false
+
+	var scriptIndex int
+	if IsExecutable(args[1]) {
+		scriptIndex = 1
+	} else if len(args) >= 3 && IsExecutable(args[2]) {
+		scriptIndex = 2
+	} else {
+		return 0
+	}
+	if scriptIndex == 2 {
+		// The second hashbang format was used: split the additional parameter string into separate arguments
+		scriptFile := args[scriptIndex]
+		splitArgs, err := shellquote.Split(args[1])
+		if err == nil {
+			// Silently ignore parsing error and don't adjust os.Args
+			scriptIndex = 1 + len(splitArgs)
+			splitArgs = append(splitArgs, scriptFile)
+			splitArgs = append(splitArgs, args[3:]...)
+			*argsPtr = append(args[0:1], splitArgs...)
+		}
+	}
+	return scriptIndex
 }
 
-// ParseHashbangArgs should be invoked when IsHashbangExecution() returns true. In case of two parameters,
-// the first parameter is split based on syntax rules of /bin/sh, and the modified arguments are written back into
-// os.Args. This allows specifying multiple parameters in the hashbang header of a script, which are usually passed into
-// the executable as one single parameter string.
-func ParseHashbangArgs() error {
-	if len(os.Args) == 3 {
-		scriptFile := os.Args[len(os.Args)-1]
-		splitArgs, err := shellquote.Split(os.Args[1])
-		if err != nil {
-			return err
-		}
-		splitArgs = append(splitArgs, scriptFile)
-		os.Args = append(os.Args[0:1], splitArgs...)
-	}
-	return nil
+func IsExecutable(filename string) bool {
+	info, err := os.Stat(filename)
+	return err == nil && info.Mode().IsRegular() && (info.Mode()&0111) != 0
 }
