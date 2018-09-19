@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"runtime/pprof"
+
+	"github.com/kballard/go-shellquote"
 )
 
 var (
@@ -66,4 +68,36 @@ func Printerr(err error) {
 
 func DumpGoroutineStacks() {
 	pprof.Lookup("goroutine").WriteTo(os.Stdout, 2)
+}
+
+// IsHashbangExecution checks, if the current process was started in one of the following forms:
+//   /path/to/EXECUTABLE executable-script-file
+//   EXECUTABLE "-flag1 -flag2 arg1 arg2" executable-script-file
+// These forms are used by the OS when running an executable script that has a first line like one of the following:
+//   #!/usr/bin/env EXECUTABLE
+//   #!/path/to/EXECUTABLE -flag1 -flag2 arg1 arg2
+func IsHashbangExecution() bool {
+	if len(os.Args) == 2 || len(os.Args) == 3 {
+		scriptFile := os.Args[len(os.Args)-1]
+		info, err := os.Stat(scriptFile)
+		return err == nil && info.Mode().IsRegular() && (info.Mode()&0111) != 0
+	}
+	return false
+}
+
+// ParseHashbangArgs should be invoked when IsHashbangExecution() returns true. In case of two parameters,
+// the first parameter is split based on syntax rules of /bin/sh, and the modified arguments are written back into
+// os.Args. This allows specifying multiple parameters in the hashbang header of a script, which are usually passed into
+// the executable as one single parameter string.
+func ParseHashbangArgs() error {
+	if len(os.Args) == 3 {
+		scriptFile := os.Args[len(os.Args)-1]
+		splitArgs, err := shellquote.Split(os.Args[1])
+		if err != nil {
+			return err
+		}
+		splitArgs = append(splitArgs, scriptFile)
+		os.Args = append(os.Args[0:1], splitArgs...)
+	}
+	return nil
 }
