@@ -109,3 +109,22 @@ func Substring(str string, iFrom int, iTo int) string {
 	}
 	return result
 }
+
+func EqualStrings(a, b []string) bool {
+	switch {
+	case len(a) != len(b):
+		return false
+	case len(a) == 0:
+		return true
+	case &a[0] == &b[0]:
+		// Compare the address of the array backing the slices
+		return true
+	}
+	// Last resort: compare every string pair
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
