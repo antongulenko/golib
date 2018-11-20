@@ -107,7 +107,7 @@ func (f *myFormatter) Format(e *logrus.Entry) ([]byte, error) {
 		return text, err
 	}
 	// Remove all whitespace and replace with a single trailing newline character
-	// Many libraries explicitely add a \n character to log lines, which leads to empty lines.
+	// Many libraries explicitly add a \n character to log lines, which leads to empty lines.
 	text = bytes.TrimSpace(text)
 	text = append(text, '\n')
 	return text, nil

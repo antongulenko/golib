@@ -25,7 +25,7 @@ type Startable interface {
 	Start(wg *sync.WaitGroup) StopChan
 }
 
-// Task is an interface for coordinated setup and teardown of applications or objects.
+// Task is an interface for coordinated setup and tear-down of applications or objects.
 // The Task interface defines a simple lifecycle. First, it is started through Start().
 // It runs until it finishes or produces an error. After any of these, the StopChan returned
 // from the Start() method must be stopped by the task.
@@ -117,7 +117,7 @@ type LoopTask struct {
 	StopHook func()
 
 	// Loop defines the loop iteration. The stop parameter can be used to query the current
-	// state of the task, or to call WaitTimeout() to controll the frequency of the loop.
+	// state of the task, or to call WaitTimeout() to control the frequency of the loop.
 	// If the return value is non-nil, the task will be stopped. If the return value
 	// is StopLoopTask, the task will be stopped without reporting an error.
 	Loop func(stop StopChan) error
@@ -163,7 +163,7 @@ func (task *LoopTask) String() string {
 	return fmt.Sprintf("LoopTask(%s)", task.Description)
 }
 
-// TimeoutTask is a Task that automatically fails after a predifined time.
+// TimeoutTask is a Task that automatically fails after a predefined time.
 // If the task is stopped before the timeout expires, no errors is logged.
 // If DumpGoroutines is set to true, all running goroutines will be printed when
 // a timeout occurs.

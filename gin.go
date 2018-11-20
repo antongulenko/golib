@@ -7,10 +7,9 @@ import (
 
 	"github.com/gin-gonic/contrib/ginrus"
 	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 )
 
-var ginLogHandler = ginrus.Ginrus(log.StandardLogger(), "", false)
+var ginLogHandler = ginrus.Ginrus(Log, "", false)
 var initGinOnce sync.Once
 
 func InitGin() {
@@ -35,7 +34,7 @@ func ginRecover(c *gin.Context) {
 		if err := recover(); err != nil {
 			stack := stack(3)
 			httpRequest, _ := httputil.DumpRequest(c.Request, false)
-			log.Errorf("[Recovery] panic recovered:\n%s\n%s\n%s", string(httpRequest), err, stack)
+			Log.Errorf("[Recovery] panic recovered:\n%s\n%s\n%s", string(httpRequest), err, stack)
 			c.AbortWithStatus(500)
 		}
 	}()

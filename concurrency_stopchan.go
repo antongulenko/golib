@@ -179,7 +179,7 @@ func (s *stopChan) WaitTimeout(t time.Duration) bool {
 // by waking up frequently and checking the passed sleep time.
 // The wakeupFactor parameter must be in ]0..1] or it is adjusted to 1. It is multiplied with the totalDuration
 // to determine the sleep duration of intermediate sleeps for increasing the sleep duration accuracy in high-load situations.
-// For example, a wakeupFactor of 0.1 will lead to 10 intermediate wakeups that check if the desired sleep time has passd already.
+// For example, a wakeupFactor of 0.1 will lead to 10 intermediate wake-ups that check if the desired sleep time has passed already.
 // If the lastTime parameter is not nil and not zero, the sleep time will be counted not from time.Now(), but from the stored time.
 // If the lastTime parameter is not zero, the current time is stored into it before returning.
 func (s *stopChan) WaitTimeoutPrecise(totalTimeout time.Duration, wakeupFactor float64, lastTimePointer *time.Time) bool {
