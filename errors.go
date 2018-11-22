@@ -26,6 +26,14 @@ func (err *MultiError) Add(errOrNil error) {
 	}
 }
 
+func (err *MultiError) AddMulti(possibleErrors ...interface{}) {
+	for _, possibleErr := range possibleErrors {
+		if trueError, isError := possibleErr.(error); isError {
+			err.Add(trueError)
+		}
+	}
+}
+
 // Error implements the error interface by printing all contained errors
 // on a separate line.
 func (err MultiError) Error() string {
