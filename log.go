@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/antongulenko/lfshook"
+	"github.com/chris-garrett/lfshook"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
