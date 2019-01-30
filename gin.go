@@ -1,6 +1,8 @@
 package golib
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"sync"
@@ -41,11 +43,60 @@ func ginRecover(c *gin.Context) {
 	c.Next()
 }
 
-func GinTask(engine *gin.Engine, addr string) Task {
-	return &NoopTask{
-		Chan: WaitErrFunc(nil, func() error {
-			return engine.Run(addr)
-		}),
-		Description: "HTTP server on " + addr,
+type GinTask struct {
+	*gin.Engine
+	Endpoint     string
+	ShutdownHook func()
+
+	server      *http.Server
+	c           StopChan
+	shutdownErr error
+}
+
+func NewGinTask(endpoint string) *GinTask {
+	return &GinTask{
+		Engine:   NewGinEngine(),
+		Endpoint: endpoint,
 	}
+}
+
+func (task *GinTask) Start(wg *sync.WaitGroup) StopChan {
+	task.c = NewStopChan()
+	if wg != nil {
+		wg.Add(1)
+	}
+	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
+		task.server = &http.Server{Addr: task.Endpoint, Handler: task.Engine}
+		err := task.server.ListenAndServe()
+		if hook := task.ShutdownHook; hook != nil {
+			hook()
+		}
+		if err == http.ErrServerClosed {
+			err = nil
+		}
+		if task.shutdownErr != nil {
+			if err == nil {
+				err = task.shutdownErr
+			} else {
+				err = MultiError([]error{task.shutdownErr, err})
+			}
+		}
+		task.c.StopErr(err)
+	}()
+	return task.c
+}
+
+func (task *GinTask) Stop() {
+	server := task.server
+	if server != nil {
+		Log.Infof("Shutting down %v", task.String())
+		task.shutdownErr = server.Shutdown(context.Background())
+	}
+}
+
+func (task *GinTask) String() string {
+	return fmt.Sprintf("HTTP server on " + task.Endpoint)
 }
