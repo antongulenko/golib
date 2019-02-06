@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/antongulenko/golib"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,20 +17,30 @@ type LogBuffer struct {
 	// regardless if it was added from a logger or explicitly over PushMessage().
 	PushMessageHook func(newMessage string)
 
-	messages          *ring.Ring
-	msgLock           sync.Mutex
-	message_buffer    int
-	originalLoggerOut io.Writer
+	loggers           []*log.Logger
+	originalLoggerOut []io.Writer
+
+	messages       *ring.Ring
+	msgLock        sync.Mutex
+	message_buffer int
+}
+
+// NewDefaultLogBuffer creates a new LogBuffer of the given buffer size, that captures the logs
+// of the default logger of the"github.com/sirupsen/logrus" package, and of the golib package.
+func NewDefaultLogBuffer(message_buffer int) *LogBuffer {
+	return NewLogBuffer(message_buffer, []*log.Logger{log.StandardLogger(), golib.Log})
 }
 
 // NewLogBuffer allocates a new LogBuffer instance with the given size for the message ring buffer.
-func NewLogBuffer(message_buffer int) *LogBuffer {
-	if message_buffer <= 0 {
-		panic("message_buffer must be >0")
+func NewLogBuffer(message_buffer int, interceptedLoggers []*log.Logger) *LogBuffer {
+	if message_buffer <= 0 || len(interceptedLoggers) == 0 {
+		panic("message_buffer must be >0 and at least one logger to intercept must be given")
 	}
 	return &LogBuffer{
-		messages:       ring.New(message_buffer),
-		message_buffer: message_buffer,
+		messages:          ring.New(message_buffer),
+		message_buffer:    message_buffer,
+		loggers:           interceptedLoggers,
+		originalLoggerOut: make([]io.Writer, len(interceptedLoggers)),
 	}
 }
 
@@ -46,7 +57,7 @@ func (buf *LogBuffer) PushMessage(msg string) {
 
 // PrintMessages prints all stored messages to the given io.Writer instance,
 // optionally limiting the number of printed messages through the max_num parameter.
-func (buf *LogBuffer) PrintMessages(w io.Writer, max_num int) {
+func (buf *LogBuffer) PrintMessages(w io.Writer, max_num int) (err error) {
 	if max_num <= 0 {
 		return
 	}
@@ -55,33 +66,38 @@ func (buf *LogBuffer) PrintMessages(w io.Writer, max_num int) {
 		msgStart = msgStart.Move(-max_num)
 	}
 	msgStart.Do(func(msg interface{}) {
-		if msg != nil {
-			fmt.Fprint(w, msg)
+		if msg != nil && err == nil {
+			_, err = fmt.Fprint(w, msg)
 		}
 	})
+	return
 }
 
-// RegisterMessageHook registers a hook for receiving log messages from the default
-// logger of the "github.com/sirupsen/logrus" package.
+// RegisterMessageHooks registers a hook for receiving log messages from all registered loggers.
 // This should be called as early as possible in order to not miss any log messages.
 // Any messages created prior to this will not be captured by the LogBuffer.
-func (buf *LogBuffer) RegisterMessageHook() {
-	log.StandardLogger().Hooks.Add(buf)
+func (buf *LogBuffer) RegisterMessageHooks() {
+	for _, l := range buf.loggers {
+		l.Hooks.Add(buf)
+	}
 }
 
-// InterceptLogger makes the default logger of the "github.com/sirupsen/logrus" package
-// stop logging to its real output. The original logging output is stored, so it
-// can be restored later with RestoreLogger().
-func (buf *LogBuffer) InterceptLogger() {
-	buf.originalLoggerOut = log.StandardLogger().Out
-	log.StandardLogger().Out = noopWriter{}
+// InterceptLogger makes the registered loggers stop logging to their real output.
+// The original logging output is stored, so it can be restored later with RestoreLogger().
+func (buf *LogBuffer) InterceptLoggers() {
+	for i, l := range buf.loggers {
+		buf.originalLoggerOut[i] = l.Out
+		l.Out = noopWriter{}
+	}
 }
 
 // RestoreLogger restored the original logger output of the default logger of the
 // "github.com/sirupsen/logrus" package. InterceptLogger() must have been called
 // prior to this.
-func (buf *LogBuffer) RestoreLogger() {
-	log.StandardLogger().Out = buf.originalLoggerOut
+func (buf *LogBuffer) RestoreLoggers() {
+	for i, l := range buf.loggers {
+		l.Out = buf.originalLoggerOut[i]
+	}
 }
 
 // Levels return all numbers in 0..255 to indicate that the LogBuffer will
@@ -94,11 +110,11 @@ func (buf *LogBuffer) Levels() []log.Level {
 	return res
 }
 
-// Fire will be called with incoming log entries after RegisterMessageHook() has
-// been called. It uses the default log formatter to format the message to a string
+// Fire will be called with incoming log entries after RegisterMessageHooks() has
+// been called. It uses the log formatter of the entry to format the message to a string
 // and stores it using PushMessage().
 func (buf *LogBuffer) Fire(entry *log.Entry) error {
-	msg, err := log.StandardLogger().Formatter.Format(entry)
+	msg, err := entry.Logger.Formatter.Format(entry)
 	if err != nil {
 		return err
 	}

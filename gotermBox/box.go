@@ -13,7 +13,7 @@ import (
 type CliLogBox struct {
 	// LogBuffer provides the underlying functionality for capturing log messages.
 	// CliLogBox acts like an extension of LogBuffer. After calling Init(),
-	// the log capturing must be taken care of using RegisterMessageHook(),
+	// the log capturing must be taken care of using RegisterMessageHooks(),
 	// InterceptLogger() and RestoreLogger().
 	*LogBuffer
 
@@ -35,7 +35,7 @@ type CliLogBox struct {
 
 // Init initializes the underlying LogBuffer and should be called before any other methods.
 func (box *CliLogBox) Init() {
-	box.LogBuffer = NewLogBuffer(box.MessageBuffer)
+	box.LogBuffer = NewDefaultLogBuffer(box.MessageBuffer)
 }
 
 // Updates refreshes the entire display output. It can be called in arbitrary time intervals,

@@ -39,7 +39,7 @@ type CliLogBoxTask struct {
 func (t *CliLogBoxTask) Init() {
 	t.updateTrigger = make(chan interface{}, 1)
 	t.CliLogBox.Init()
-	t.RegisterMessageHook()
+	t.RegisterMessageHooks()
 
 	// Try to directly refresh the screen every time a new message comes in
 	t.PushMessageHook = func(msg string) {
@@ -59,12 +59,12 @@ func (t *CliLogBoxTask) Start(wg *sync.WaitGroup) golib.StopChan {
 	if t.Update == nil {
 		return golib.NewStoppedChan(errors.New("CliLogBoxTask.Update cannot be nil"))
 	}
-	t.InterceptLogger()
+	t.InterceptLoggers()
 	t.updateTask = &golib.LoopTask{
 		Description: "CliLogBoxTask",
 		StopHook: func() {
 			err := t.updateBox() // One last screen refresh to make sure no messages get lost.
-			t.RestoreLogger()
+			t.RestoreLoggers()
 			golib.Printerr(err)
 		},
 		Loop: func(stop golib.StopChan) (err error) {

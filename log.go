@@ -3,7 +3,6 @@ package golib
 import (
 	"bytes"
 	"flag"
-	"os"
 	"time"
 
 	"github.com/chris-garrett/lfshook"
@@ -30,24 +29,13 @@ var (
 	LogVeryQuiet bool
 
 	// Log is the package-wide logger for the golib package. It can be configured or disabled.
-	Log = &log.Logger{
-		Out: os.Stderr,
-		Formatter: &myFormatter{
-			f: log.TextFormatter{
-				FullTimestamp:   true,
-				TimestampFormat: time.StampMilli,
-			},
-		},
-		Hooks: make(log.LevelHooks),
-		Level: log.DebugLevel,
-	}
+	Log = log.New()
 )
 
 func init() {
-	// Configure logging output
-	log.SetOutput(os.Stderr)
-	log.SetFormatter(newLogFormatter())
-	Log = log.StandardLogger()
+	formatter := newLogFormatter()
+	log.StandardLogger().SetFormatter(formatter)
+	Log.SetFormatter(formatter)
 }
 
 // RegisterLogFlags registers flags for changing variables that will control
@@ -60,9 +48,16 @@ func RegisterLogFlags() {
 }
 
 // ConfigureLogging configures the logger based on the global Log* variables defined in the package.
+// It calls ConfigureLogger() for the standard Logrus logger and the logger of this package.
 // This function should be called early in every main() function, preferably before any prior logging output,
 // but after calling RegisterLogFlags() and flag.Parse().
 func ConfigureLogging() {
+	ConfigureLogger(Log)
+	ConfigureLogger(log.StandardLogger())
+}
+
+// ConfigureLogger configures the given logger based on Log* variables defined in the package.
+func ConfigureLogger(l *log.Logger) {
 	level := log.InfoLevel
 	if LogVerbose {
 		level = log.DebugLevel
@@ -71,25 +66,22 @@ func ConfigureLogging() {
 	} else if LogQuiet {
 		level = log.WarnLevel
 	}
-	log.SetLevel(level)
+	l.SetLevel(level)
 	if LogFile != "" {
 		pathmap := make(lfshook.PathMap)
 		for i := 0; i < 256; i++ {
 			pathmap[log.Level(i)] = LogFile
 		}
 		hook := lfshook.NewHook(pathmap)
-		formatter := newLogFormatter()
-		hook.SetFormatter(formatter)
-		// HACK: force the formatter to use colored output in the file
-		formatter.f.DisableColors = false
-		formatter.f.ForceColors = true
-		log.AddHook(hook)
+		hook.SetFormatter(newLogFormatter())
+		l.AddHook(hook)
 	}
 }
 
 func newLogFormatter() *myFormatter {
 	return &myFormatter{
 		f: log.TextFormatter{
+			DisableColors:   false,
 			ForceColors:     true,
 			FullTimestamp:   true,
 			TimestampFormat: time.StampMilli,
