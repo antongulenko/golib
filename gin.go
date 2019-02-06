@@ -70,6 +70,7 @@ func (task *GinTask) Start(wg *sync.WaitGroup) StopChan {
 			defer wg.Done()
 		}
 		task.server = &http.Server{Addr: task.Endpoint, Handler: task.Engine}
+		Log.Infoln("Starting", task)
 		err := task.server.ListenAndServe()
 		if hook := task.ShutdownHook; hook != nil {
 			hook()
@@ -92,7 +93,7 @@ func (task *GinTask) Start(wg *sync.WaitGroup) StopChan {
 func (task *GinTask) Stop() {
 	server := task.server
 	if server != nil {
-		Log.Infof("Shutting down %v", task.String())
+		Log.Infoln("Shutting down", task)
 		task.shutdownErr = server.Shutdown(context.Background())
 	}
 }
