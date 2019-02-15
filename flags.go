@@ -159,7 +159,9 @@ func EscapeExistingFlags(prefix string) {
 }
 
 // When packages or modules are loaded AFTER parsing flags, avoid collisions when flags are re-defined.
-func ParseFlags() {
+func ParseFlags() []string {
 	flag.Parse()
+	args := flag.Args()
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	return args
 }
