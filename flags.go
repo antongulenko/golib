@@ -2,7 +2,9 @@ package golib
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -144,4 +146,20 @@ func FormatOrderedMap(keys []string, values []string) string {
 		started = true
 	}
 	return buf.String()
+}
+
+// EscapeExistingFlags can be used before defining new flags to escape existing flags that have been defined
+// by other packages or modules. This can be used to avoid collisions of flag names.
+func EscapeExistingFlags(prefix string) {
+	oldCommandLine := flag.CommandLine
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	oldCommandLine.VisitAll(func(f *flag.Flag) {
+		flag.Var(f.Value, prefix+f.Name, f.Usage)
+	})
+}
+
+// When packages or modules are loaded AFTER parsing flags, avoid collisions when flags are re-defined.
+func ParseFlags() {
+	flag.Parse()
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 }
