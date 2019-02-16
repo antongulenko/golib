@@ -18,7 +18,11 @@ func InitGin() {
 	})
 }
 
-func NewGinEngine(logHandler *GinLogHandler) *gin.Engine {
+func NewGinEngine() *gin.Engine {
+	return NewGinEngineWithHandler(nil)
+}
+
+func NewGinEngineWithHandler(logHandler *GinLogHandler) *gin.Engine {
 	InitGin()
 	engine := gin.New()
 	if logHandler == nil {
@@ -54,9 +58,13 @@ type GinTask struct {
 	shutdownErr error
 }
 
-func NewGinTask(endpoint string, logHandler *GinLogHandler) *GinTask {
+func NewGinTask(endpoint string) *GinTask {
+	return NewGinTaskWithHandler(endpoint, nil)
+}
+
+func NewGinTaskWithHandler(endpoint string, logHandler *GinLogHandler) *GinTask {
 	return &GinTask{
-		Engine:   NewGinEngine(logHandler),
+		Engine:   NewGinEngineWithHandler(logHandler),
 		Endpoint: endpoint,
 	}
 }
