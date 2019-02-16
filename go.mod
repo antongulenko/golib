@@ -4,7 +4,6 @@ require (
 	github.com/antongulenko/goterm v0.0.3
 	github.com/chris-garrett/lfshook v0.0.0-20180308193436-3d834ab13911
 	github.com/gin-contrib/sse v0.0.0-20170109093832-22d885f9ecc7 // indirect
-	github.com/gin-gonic/contrib v0.0.0-20181101072842-54170a7b0b4b
 	github.com/gin-gonic/gin v1.3.0
 	github.com/golang/protobuf v1.2.0 // indirect
 	github.com/json-iterator/go v1.1.5 // indirect

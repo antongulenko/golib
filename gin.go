@@ -7,11 +7,9 @@ import (
 	"net/http/httputil"
 	"sync"
 
-	"github.com/gin-gonic/contrib/ginrus"
 	"github.com/gin-gonic/gin"
 )
 
-var ginLogHandler = ginrus.Ginrus(Log, "", false)
 var initGinOnce sync.Once
 
 func InitGin() {
@@ -20,13 +18,16 @@ func InitGin() {
 	})
 }
 
-func NewGinEngine() *gin.Engine {
+func NewGinEngine(logHandler *GinLogHandler) *gin.Engine {
 	InitGin()
 	engine := gin.New()
-	engine.Use(ginLogHandler, ginRecover)
+	if logHandler == nil {
+		logHandler = DefaultGinLogHandler
+	}
+	engine.Use(logHandler.LogRequest, ginRecover)
 	engine.NoRoute(func(c *gin.Context) {
 		c.Writer.WriteHeader(http.StatusNotFound)
-		c.Writer.WriteString("404 page not found\n")
+		_, _ = c.Writer.WriteString("404 page not found\n")
 	})
 	return engine
 }
@@ -53,9 +54,9 @@ type GinTask struct {
 	shutdownErr error
 }
 
-func NewGinTask(endpoint string) *GinTask {
+func NewGinTask(endpoint string, logHandler *GinLogHandler) *GinTask {
 	return &GinTask{
-		Engine:   NewGinEngine(),
+		Engine:   NewGinEngine(logHandler),
 		Endpoint: endpoint,
 	}
 }
