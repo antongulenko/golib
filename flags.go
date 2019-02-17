@@ -159,9 +159,11 @@ func EscapeExistingFlags(prefix string) {
 }
 
 // When packages or modules are loaded AFTER parsing flags, avoid collisions when flags are re-defined.
-func ParseFlags() []string {
+// The original FlagSet is returned, so that PrintDefaults() can be used. All non-flag arguments are returned as well.
+func ParseFlags() (*flag.FlagSet, []string) {
 	flag.Parse()
 	args := flag.Args()
+	previousFlags := flag.CommandLine
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	return args
+	return previousFlags, args
 }
