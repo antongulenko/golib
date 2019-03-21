@@ -25,6 +25,11 @@ const (
 	FlagsTasks
 )
 
+const (
+	MapSeparator = ", "
+	MapEquals    = "="
+)
+
 // RegisterFlags registers various flags provided by the golib package, controlled
 // by the bit-mask parameter.
 func RegisterFlags(flags Flags) {
@@ -138,14 +143,44 @@ func FormatOrderedMap(keys []string, values []string) string {
 	for i, val := range values {
 		key := keys[i]
 		if started {
-			buf.WriteString(", ")
+			buf.WriteString(MapSeparator)
 		}
 		buf.WriteString(key)
-		buf.WriteString("=")
+		buf.WriteString(MapEquals)
 		buf.WriteString(val)
 		started = true
 	}
 	return buf.String()
+}
+
+// ParseMap invokes ParseOrderedMap, and returns the results as an unordered map
+func ParseMap(data string) (map[string]string, error) {
+	keys, values, err := ParseOrderedMap(data)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[string]string, len(keys))
+	for i, key := range keys {
+		res[key] = values[i]
+	}
+	return res, nil
+}
+
+// ParseOrderedMap parses a string that was formatted by FormatMap or FormatOrderedMap and returns the contained
+// key-value pairs as ordered slices.
+func ParseOrderedMap(data string) ([]string, []string, error) {
+	parts := strings.Split(data, MapSeparator)
+	keys := make([]string, len(parts))
+	values := make([]string, len(parts))
+	for i, part := range parts {
+		split := strings.SplitN(part, MapEquals, 2)
+		if len(split) != 2 {
+			return nil, nil, fmt.Errorf("Failed to parse map (key-value pair %v does not contain separator '%v'): %v", i+1, MapEquals, part)
+		}
+		keys[i] = split[0]
+		values[i] = split[1]
+	}
+	return keys, values, nil
 }
 
 // EscapeExistingFlags can be used before defining new flags to escape existing flags that have been defined
