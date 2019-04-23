@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -63,17 +62,4 @@ func FindMatchingFiles(regex *regexp.Regexp, directories []string) (result []str
 		}
 	}
 	return
-}
-
-// RemoveDuplicates sorts the given string slice and returns a copy with all duplicate
-// strings removed.
-func RemoveDuplicates(strings []string) []string {
-	sort.Strings(strings)
-	result := make([]string, 0, len(strings))
-	for _, str := range strings {
-		if len(result) == 0 || str != result[len(result)-1] {
-			result = append(result, str)
-		}
-	}
-	return result
 }
