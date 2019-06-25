@@ -1,6 +1,7 @@
-package golib
+package gotermBox
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/antongulenko/goterm"
@@ -42,7 +43,7 @@ func GetTerminalSize() TerminalWindowSize {
 	}
 	if w < 0 || h < 0 {
 		warnTerminalSizeOnce.Do(func() {
-			Log.Warnf("Failed to get terminal size, using default: %+v", DefaultTerminalWindowSize)
+			fmt.Printf("Failed to get terminal size, using default: %+v", DefaultTerminalWindowSize)
 		})
 	}
 	return ws
