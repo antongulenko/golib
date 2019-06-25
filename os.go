@@ -3,7 +3,7 @@ package golib
 import (
 	"sync"
 
-	"github.com/buger/goterm"
+	"github.com/antongulenko/goterm"
 )
 
 var (
