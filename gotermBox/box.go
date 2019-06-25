@@ -1,7 +1,6 @@
 package gotermBox
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/antongulenko/golib"
@@ -45,13 +44,9 @@ func (box *CliLogBox) Init() {
 // width, they will be cut off. It can produce an arbitrary number of lines.
 func (box *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
 	termSize := golib.GetTerminalSize()
-	gotermBox := &goterm.Box{
-		Buf:      new(bytes.Buffer),
-		Width:    int(termSize.Col),
-		Height:   int(termSize.Row) - 1, // Subtract 1 for the line with cursor
-		PaddingX: 1,
-		PaddingY: 0,
-	}
+	gotermBox := goterm.NewBox(int(termSize.Col), int(termSize.Row), 0)
+	gotermBox.Height -= 1 // Subtract 1 for the line with cursor
+
 	var separator, dots string
 	if box.NoUtf8 {
 		gotermBox.Border = "- | - - - -"
