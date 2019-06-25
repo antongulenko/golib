@@ -1,9 +1,9 @@
 package gotermBox
 
 import (
+	"bytes"
 	"io"
 
-	"github.com/antongulenko/golib"
 	"github.com/antongulenko/goterm"
 )
 
@@ -43,10 +43,13 @@ func (box *CliLogBox) Init() {
 // which also receives the width of the screen. If it prints lines that are longer than the screen
 // width, they will be cut off. It can produce an arbitrary number of lines.
 func (box *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
-	console := golib.GetTerminalSize()
-	gotermBox := goterm.NewBox(int(console.Col), int(console.Row), 0)
-
-	gotermBox.Height -= 1 // Line with cursor
+	gotermBox := goterm.Box{
+		Buf:      new(bytes.Buffer),
+		Width:    goterm.Width(),
+		Height:   goterm.Height() - 1, // Subtract 1 for the line with cursor
+		PaddingX: 1,
+		PaddingY: 0,
+	}
 	var separator, dots string
 	if box.NoUtf8 {
 		gotermBox.Border = "- | - - - -"
@@ -59,7 +62,7 @@ func (box *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
 	}
 	lines := gotermBox.Height - 3 // borders + separator
 
-	counter := newlineCounter{out: gotermBox}
+	counter := newlineCounter{out: &gotermBox}
 	if box.LogLines > 0 {
 		counter.max_lines = lines - box.LogLines
 	}
@@ -77,7 +80,7 @@ func (box *CliLogBox) Update(writeContent func(out io.Writer, width int)) {
 		}
 		gotermBox.Write([]byte("\n"))
 	}
-	box.PrintMessages(gotermBox, lines)
+	box.PrintMessages(&gotermBox, lines)
 	goterm.MoveCursor(1, 1)
 	goterm.Print(gotermBox)
 	goterm.Flush()
