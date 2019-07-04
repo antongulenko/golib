@@ -32,6 +32,11 @@ type Command struct {
 	// See LogDir
 	LogFile string
 
+	// PreserveStdout set to true will lead the subprocess to redirect its stdout and stderr streams to the
+	// streams of the parent process (which is the default when launching processes). This flag is ignored when
+	// LogDir and LogFile is set.
+	PreserveStdout bool
+
 	// Proc will be initialized when calling Start() and points to the running subprocess.
 	Proc *os.Process
 
@@ -58,8 +63,14 @@ func (command *Command) Start(wg *sync.WaitGroup) StopChan {
 		process.Stderr = logF
 	} else {
 		command.LogFile = ""
-		process.Stdout = nil
-		process.Stderr = nil
+		command.LogDir = ""
+		if command.PreserveStdout {
+			process.Stdout = os.Stdout
+			process.Stderr = os.Stderr
+		} else {
+			process.Stdout = nil
+			process.Stderr = nil
+		}
 	}
 
 	err := process.Start()
