@@ -123,6 +123,7 @@ func ToUtf8(iso8859 string) string {
 // This function implements gin.HandlerFunc.
 // Decode HTTP header keys and values from ISO-8859-1 to UTF-8
 func DecodeHeadersToUtf8(ctx *gin.Context) {
+	defer ctx.Next()
 	for key, values := range ctx.Request.Header {
 		changed := false
 		decodedKey := ToUtf8(key)
