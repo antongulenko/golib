@@ -110,3 +110,35 @@ func (task *GinTask) Stop() {
 func (task *GinTask) String() string {
 	return fmt.Sprintf("HTTP server on " + task.Endpoint)
 }
+
+func ToUtf8(iso8859 string) string {
+	iso8859bytes := []byte(iso8859)
+	buf := make([]rune, len(iso8859bytes))
+	for i, b := range iso8859bytes {
+		buf[i] = rune(b)
+	}
+	return string(buf)
+}
+
+// This function implements gin.HandlerFunc.
+// Decode HTTP header keys and values from ISO-8859-1 to UTF-8
+func DecodeHeadersToUtf8(ctx *gin.Context) {
+	for key, values := range ctx.Request.Header {
+		changed := false
+		decodedKey := ToUtf8(key)
+		for i, value := range values {
+			decodedValue := ToUtf8(value)
+			if value != decodedValue {
+				values[i] = decodedValue
+				changed = true
+			}
+		}
+		if decodedKey != key {
+			changed = true
+		}
+		if changed {
+			delete(ctx.Request.Header, key)
+			ctx.Request.Header[decodedKey] = values
+		}
+	}
+}
