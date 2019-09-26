@@ -196,7 +196,17 @@ func EscapeExistingFlags(prefix string) {
 // When packages or modules are loaded AFTER parsing flags, avoid collisions when flags are re-defined.
 // The original FlagSet is returned, so that PrintDefaults() can be used. All non-flag arguments are returned as well.
 func ParseFlags() (*flag.FlagSet, []string) {
-	flag.Parse()
+	// By default, the program terminates with exit code 2 when --help is defined. Replace with exit code 0, since showing the help is not an error condition.
+	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		// The error and/or help message has been printed already
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		} else {
+			os.Exit(2)
+		}
+	}
+
 	args := flag.Args()
 	previousFlags := flag.CommandLine
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
