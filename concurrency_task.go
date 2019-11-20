@@ -11,7 +11,6 @@ import (
 // The main interface for this is the Task interface. The Startable interface is extracted
 // to make the signature of the Start() method reusable.
 type Startable interface {
-
 	// The Start() method will be called exactly once and should fully initialize and start
 	// the underlying task. If this involves creating goroutines, they should be registered
 	// in the given *sync.WaitGroup. The resulting StopChan must be closed by the task when it finishes,
@@ -44,6 +43,33 @@ type Task interface {
 
 	// String returns a concise and human-readable description of the task.
 	String() string
+}
+
+// SetupTask is an implementation of the Task interface that executes a set routine
+// when the task is started. The task itself does not do anything.
+type SetupTask struct {
+	// Setup will be executed when this Task is started.
+	Setup func()
+	// Description should be set to something that describes the purpose of this task.
+	Description string
+}
+
+// Start implements the Task interface by executing the Setup routine and returning the nil-value of StopChan,
+// which indicates that this task does not actively do anything.
+func (task *SetupTask) Start(*sync.WaitGroup) StopChan {
+	if setup := task.Setup; setup != nil {
+		setup()
+	}
+	return StopChan{}
+}
+
+// Stop implements the Task interface and does nothing.
+func (task *SetupTask) Stop() {
+}
+
+// String implements the Task interface by using the user-defined Description field.
+func (task *SetupTask) String() string {
+	return fmt.Sprintf("Setup(%s)", task.Description)
 }
 
 // CleanupTask is an implementation of the Task interface that executes a cleanup routine
