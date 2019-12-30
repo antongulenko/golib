@@ -26,8 +26,9 @@ const (
 )
 
 const (
-	MapSeparator = ", "
-	MapEquals    = "="
+	EntrySeparator          = ","
+	EntrySeparatorFormatted = EntrySeparator + " "
+	ValueSeparator          = "="
 )
 
 // RegisterFlags registers various flags provided by the golib package, controlled
@@ -59,9 +60,6 @@ func (i *StringSlice) Set(value string) error {
 	return nil
 }
 
-// KeyValueSeparator is used by KeyValueStringSlice to split 'key=value' parameters.
-const KeyValueSeparator = "="
-
 // KeyValueStringSlice implements the flag.Value interface. It expects value of the form 'key=value'
 // and splits them into the corresponding parts.
 type KeyValueStringSlice struct {
@@ -77,7 +75,7 @@ func (k *KeyValueStringSlice) String() string {
 // Set implements the flag.Value interface by splitting the 'key=value' string
 // and returning an error if the format is wrong.
 func (k *KeyValueStringSlice) Set(value string) error {
-	parts := strings.SplitN(value, KeyValueSeparator, 2)
+	parts := strings.SplitN(value, ValueSeparator, 2)
 	if len(parts) != 2 {
 		return fmt.Errorf("Wrong format. Need key=value, got " + value)
 	}
@@ -125,6 +123,24 @@ func (k *KeyValueStringSlice) deleteIndex(i int, slice []string) []string {
 	return slice[:len(slice)-1]
 }
 
+// FormatStringSlice formats the given slice of strings to a human-readable string
+func FormatStringSlice(stringSlice []string) string {
+	return strings.Join(stringSlice, EntrySeparatorFormatted)
+}
+
+// ParseSlice splits the given string on occurrences of `EntrySeparator` and trims all entries. Empty entries are ignored.
+func ParseSlice(data string) []string {
+	parts := strings.Split(data, EntrySeparator)
+	res := make([]string, 0, len(parts))
+	for _, val := range parts {
+		val = strings.TrimSpace(val)
+		if val != "" {
+			res = append(res, val)
+		}
+	}
+	return res
+}
+
 // FormatMap returns a readable representation of the given string map.
 func FormatMap(m map[string]string) string {
 	keys := make([]string, 0, len(m))
@@ -143,10 +159,10 @@ func FormatOrderedMap(keys []string, values []string) string {
 	for i, val := range values {
 		key := keys[i]
 		if started {
-			buf.WriteString(MapSeparator)
+			buf.WriteString(EntrySeparatorFormatted)
 		}
 		buf.WriteString(key)
-		buf.WriteString(MapEquals)
+		buf.WriteString(ValueSeparator)
 		buf.WriteString(val)
 		started = true
 	}
@@ -154,33 +170,37 @@ func FormatOrderedMap(keys []string, values []string) string {
 }
 
 // ParseMap invokes ParseOrderedMap, and returns the results as an unordered map
-func ParseMap(data string) (map[string]string, error) {
-	keys, values, err := ParseOrderedMap(data)
-	if err != nil {
-		return nil, err
-	}
+func ParseMap(data string) map[string]string {
+	keys, values := ParseOrderedMap(data)
 	res := make(map[string]string, len(keys))
 	for i, key := range keys {
 		res[key] = values[i]
 	}
-	return res, nil
+	return res
 }
 
 // ParseOrderedMap parses a string that was formatted by FormatMap or FormatOrderedMap and returns the contained
-// key-value pairs as ordered slices.
-func ParseOrderedMap(data string) ([]string, []string, error) {
-	parts := strings.Split(data, MapSeparator)
-	keys := make([]string, len(parts))
-	values := make([]string, len(parts))
-	for i, part := range parts {
-		split := strings.SplitN(part, MapEquals, 2)
-		if len(split) != 2 {
-			return nil, nil, fmt.Errorf("Failed to parse map (key-value pair %v does not contain separator '%v'): %v", i+1, MapEquals, part)
+// key-value pairs as ordered slices. Keys and values are trimmed of whitespace. Entries that do not contain ValueSeparator
+// result in keys empty map values. Entirely empty entries are ignored.
+func ParseOrderedMap(data string) ([]string, []string) {
+	parts := strings.Split(data, EntrySeparator)
+	keys := make([]string, 0, len(parts))
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		split := strings.SplitN(part, ValueSeparator, 2)
+		key, value := part, ""
+		if len(split) == 2 {
+			key = split[0]
+			value = split[1]
 		}
-		keys[i] = split[0]
-		values[i] = split[1]
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key != "" {
+			keys = append(keys, key)
+			values = append(values, value)
+		}
 	}
-	return keys, values, nil
+	return keys, values
 }
 
 // EscapeExistingFlags can be used before defining new flags to escape existing flags that have been defined
