@@ -23,20 +23,17 @@ func (s *AbstractTestSuite) SetT(t *testing.T) {
 	s.Assertions = require.New(t)
 }
 
-func (s *AbstractTestSuite) Run(t *testing.T) {
-	suite.Run(t, s)
-}
-
 func (s *AbstractTestSuite) SubTest(name string, test func()) {
 	oldT := s.t
 	oldAssertions := s.Assertions
-	s.T().Run(name, func(t *testing.T) {
-		s.t = t
-		s.Assertions = require.New(t)
+	defer func() {
+		s.t = oldT
+		s.Assertions = oldAssertions
+	}()
+	oldT.Run(name, func(t *testing.T) {
+		s.SetT(t)
 		test()
 	})
-	s.t = oldT
-	s.Assertions = oldAssertions
 }
 
 func (s *AbstractTestSuite) SubTestSuite(testingSuite suite.TestingSuite) {

@@ -1,6 +1,6 @@
 module github.com/antongulenko/golib
 
-go 1.12
+go 1.14
 
 require (
 	github.com/antongulenko/goterm v0.0.3

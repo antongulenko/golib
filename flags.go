@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -67,6 +68,19 @@ type KeyValueStringSlice struct {
 	Values []string
 }
 
+// SplitMapKeysAndValues returns a KeyValueStringSlice that holds the keys and values of the input map.
+func SplitMapKeysAndValues(m map[string]string) KeyValueStringSlice {
+	res := KeyValueStringSlice{
+		Keys:   make([]string, 0, len(m)),
+		Values: make([]string, 0, len(m)),
+	}
+	for key, value := range m {
+		res.Keys = append(res.Keys, key)
+		res.Values = append(res.Values, value)
+	}
+	return res
+}
+
 // String implements the flag.Value interface by printing all contains key-value pairs.
 func (k *KeyValueStringSlice) String() string {
 	return FormatOrderedMap(k.Keys, k.Values)
@@ -123,6 +137,19 @@ func (k *KeyValueStringSlice) deleteIndex(i int, slice []string) []string {
 	return slice[:len(slice)-1]
 }
 
+func (k *KeyValueStringSlice) Less(i, j int) bool {
+	return k.Keys[i] < k.Keys[j]
+}
+
+func (k *KeyValueStringSlice) Swap(i, j int) {
+	k.Keys[i], k.Keys[j] = k.Keys[j], k.Keys[i]
+	k.Values[i], k.Values[j] = k.Values[j], k.Values[i]
+}
+
+func (k *KeyValueStringSlice) Len() int {
+	return len(k.Keys)
+}
+
 // FormatStringSlice formats the given slice of strings to a human-readable string
 func FormatStringSlice(stringSlice []string) string {
 	return strings.Join(stringSlice, EntrySeparatorFormatted)
@@ -167,6 +194,13 @@ func FormatOrderedMap(keys []string, values []string) string {
 		started = true
 	}
 	return buf.String()
+}
+
+// FormatSortedMap returns a readable representation of the given key-value pairs, sorted by the keys.
+func FormatSortedMap(m map[string]string) string {
+	keysAndValues := SplitMapKeysAndValues(m)
+	sort.Sort(&keysAndValues)
+	return FormatOrderedMap(keysAndValues.Keys, keysAndValues.Values)
 }
 
 // ParseMap invokes ParseOrderedMap, and returns the results as an unordered map
