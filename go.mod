@@ -10,5 +10,5 @@ require (
 	github.com/lunixbochs/vtclean v1.0.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.3.0
-	golang.org/x/text v0.3.2
+	golang.org/x/text v0.3.8
 )
